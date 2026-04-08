@@ -449,6 +449,10 @@ func (c *BCMClient) CallJSONRPC(ctx context.Context, service, call string, args 
 		return nil, fmt.Errorf("failed to marshal JSONRPC request: %w", err)
 	}
 
+	tflog.Debug(ctx, "JSONRPC request body", map[string]interface{}{
+		"body": string(jsonBody),
+	})
+
 	req, err := http.NewRequestWithContext(ctx, "POST", c.Endpoint+"/json", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
