@@ -86,6 +86,114 @@ type CMDeviceDeviceResourceModel struct {
 	// These define the device's role in Kubernetes/etcd clusters
 	KubeletRoles  []KubeletRoleModel  `tfsdk:"kubelet_role"`
 	EtcdHostRoles []EtcdHostRoleModel `tfsdk:"etcd_host_role"`
+
+	// Extended CMDevice API fields (fuller parity with getDevice JSON)
+	CmdaemonURL           types.String                 `tfsdk:"cmdaemon_url"`
+	Fips                  types.String                 `tfsdk:"fips"`
+	FromTemplateNode      types.String                 `tfsdk:"from_template_node"`
+	IndexInsideContainer  types.Int64                  `tfsdk:"index_inside_container"`
+	ParentUUID            types.String                 `tfsdk:"parent_uuid"`
+	ProvisioningInterface types.String                 `tfsdk:"provisioning_interface"`
+	ProvisioningTransport types.String                 `tfsdk:"provisioning_transport"`
+	Services              []DeviceOSServiceConfigModel `tfsdk:"services"`
+
+	// Provisioning & boot configuration
+	AllowNetworkingRestart types.Bool   `tfsdk:"allow_networking_restart"`
+	BootLoaderFile         types.String `tfsdk:"boot_loader_file"`
+	Disksetup              types.String `tfsdk:"disksetup"`
+	InstallBootRecord      types.Bool   `tfsdk:"install_boot_record"`
+	InstallMode            types.String `tfsdk:"install_mode"`
+	NextBootInstallMode    types.String `tfsdk:"next_boot_install_mode"`
+	NodeInstallerDisk      types.Bool   `tfsdk:"node_installer_disk"`
+	Pxelabel               types.String `tfsdk:"pxelabel"`
+	Raidconf               types.String `tfsdk:"raidconf"`
+	VersionConfigFiles     types.Bool   `tfsdk:"version_config_files"`
+
+	// Kernel & performance
+	CpuspeedGovernor    types.String `tfsdk:"cpuspeed_governor"`
+	IoScheduler         types.String `tfsdk:"io_scheduler"`
+	KernelOutputConsole types.String `tfsdk:"kernel_output_console"`
+	KernelVersion       types.String `tfsdk:"kernel_version"`
+
+	// Script hooks
+	CustomPingScript                  types.String `tfsdk:"custom_ping_script"`
+	CustomPingScriptArgument          types.String `tfsdk:"custom_ping_script_argument"`
+	CustomPowerScript                 types.String `tfsdk:"custom_power_script"`
+	CustomPowerScriptArgument         types.String `tfsdk:"custom_power_script_argument"`
+	CustomRemoteConsoleScript         types.String `tfsdk:"custom_remote_console_script"`
+	CustomRemoteConsoleScriptArgument types.String `tfsdk:"custom_remote_console_script_argument"`
+	Finalize                          types.String `tfsdk:"finalize"`
+	Initialize                        types.String `tfsdk:"initialize"`
+
+	// Exclude lists (rsync/provisioning filters)
+	ExcludeListFull             types.String `tfsdk:"exclude_list_full"`
+	ExcludeListGrab             types.String `tfsdk:"exclude_list_grab"`
+	ExcludeListGrabnew          types.String `tfsdk:"exclude_list_grabnew"`
+	ExcludeListManipulateScript types.String `tfsdk:"exclude_list_manipulate_script"`
+	ExcludeListSync             types.String `tfsdk:"exclude_list_sync"`
+	ExcludeListUpdate           types.String `tfsdk:"exclude_list_update"`
+
+	// Device flags
+	DataNode             types.Bool `tfsdk:"data_node"`
+	DisableFabricNVME    types.Bool `tfsdk:"disable_fabric_nvme"`
+	ForceFullEnvironment types.Bool `tfsdk:"force_full_environment"`
+	SupportsGNSS         types.Bool `tfsdk:"supports_gnss"`
+	TemplateNode         types.Bool `tfsdk:"template_node"`
+
+	// Metadata & user-defined
+	Tag               types.String `tfsdk:"tag"`
+	UseExclusivelyFor types.String `tfsdk:"use_exclusively_for"`
+	Userdefined1      types.String `tfsdk:"userdefined1"`
+	Userdefined2      types.String `tfsdk:"userdefined2"`
+
+	// References (nullable UUIDs / simple values)
+	Rack               types.String `tfsdk:"rack"`
+	SoftwareImageProxy types.String `tfsdk:"software_image_proxy"`
+
+	// String lists
+	BlockDevicesClearedOnNextBoot types.List `tfsdk:"block_devices_cleared_on_next_boot"`
+	Modules                       types.List `tfsdk:"modules"`
+
+	// Complex objects stored as JSON-encoded strings (null when unset)
+	BiosSetup        types.String `tfsdk:"bios_setup"`
+	BmcSettings      types.String `tfsdk:"bmc_settings"`
+	ExtraValues      types.String `tfsdk:"extra_values"`
+	ProxySettings    types.String `tfsdk:"proxy_settings"`
+	SeLinuxSettings  types.String `tfsdk:"se_linux_settings"`
+	TimeZoneSettings types.String `tfsdk:"time_zone_settings"`
+
+	// Complex lists stored as JSON-encoded strings (null when empty)
+	Fsexports              types.String `tfsdk:"fsexports"`
+	Fsmounts               types.String `tfsdk:"fsmounts"`
+	GpuSettings            types.String `tfsdk:"gpu_settings"`
+	PowerDistributionUnits types.String `tfsdk:"power_distribution_units"`
+	StaticRoutes           types.String `tfsdk:"static_routes"`
+	SwitchPorts            types.String `tfsdk:"switch_ports"`
+	UserDefinedResources   types.String `tfsdk:"user_defined_resources"`
+}
+
+// DeviceOSServiceConfigModel represents one BCM OSServiceConfig entry on a device
+// (device.services[] in the CMDevice API). Field names map to Terraform attributes
+// (snake_case); build/parse maps to BCM JSON (camelCase / mixed keys).
+type DeviceOSServiceConfigModel struct {
+	UUID                       types.String `tfsdk:"uuid"`
+	Name                       types.String `tfsdk:"name"`
+	BaseType                   types.String `tfsdk:"base_type"`
+	AddFromRole                types.Bool   `tfsdk:"add_from_role"`
+	Autostart                  types.Bool   `tfsdk:"autostart"`
+	BelongsToRole              types.Bool   `tfsdk:"belongs_to_role"`
+	Monitored                  types.Bool   `tfsdk:"monitored"`
+	RefExtraUUID               types.String `tfsdk:"ref_extra_uuid"`
+	RefRoleUUID                types.String `tfsdk:"ref_role_uuid"`
+	RunIf                      types.String `tfsdk:"run_if"`
+	ScriptTimeout              types.Int64  `tfsdk:"script_timeout"`
+	ServiceType                types.Int64  `tfsdk:"service_type"`
+	SicknessCheckInterval      types.Int64  `tfsdk:"sickness_check_interval"`
+	SicknessCheckScriptTimeout types.Int64  `tfsdk:"sickness_check_script_timeout"`
+	ChildType                  types.String `tfsdk:"child_type"`
+	FromGenericRole            types.Bool   `tfsdk:"from_generic_role"`
+	Internal                   types.Bool   `tfsdk:"internal"`
+	SicknessCheckScript        types.String `tfsdk:"sickness_check_script"`
 }
 
 // NewCMDeviceDeviceResource creates a new resource instance.
@@ -214,10 +322,14 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				MarkdownDescription: "Force operation (override BCM validation warnings)",
 			},
 			"power_control": schema.StringAttribute{
-				Optional:            true,
-				MarkdownDescription: "Power control method (e.g., 'none', 'ipmi', 'pdu', 'redfish', 'custom')",
+				Optional: true,
+				MarkdownDescription: "Power control method: 'none', 'ipmi', 'pdu', 'redfish', 'custom', or an IPMI interface " +
+					"reference such as 'ipmi0' (BCM returns the BMC interface name when using IPMI).",
 				Validators: []validator.String{
-					stringvalidator.OneOf("none", "ipmi", "pdu", "redfish", "custom"),
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^(none|ipmi|pdu|redfish|custom|ipmi[0-9]+)$`),
+						"must be none, ipmi, pdu, redfish, custom, or ipmi followed by digits (e.g. ipmi0)",
+					),
 				},
 			},
 			"default_gateway": schema.StringAttribute{
@@ -275,6 +387,360 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"cmdaemon_url": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "CMDaemon URL for this device (returned by BCM).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"fips": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "FIPS mode; BCM may return CATEGORY when inherited from the category.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"from_template_node": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Template node UUID reference (zero UUID means not from a template).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be valid UUID (RFC 4122)",
+					),
+				},
+			},
+			"index_inside_container": schema.Int64Attribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Index of this device inside its container entity.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"parent_uuid": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Parent entity UUID when applicable.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be valid UUID (RFC 4122)",
+					),
+				},
+			},
+			"provisioning_interface": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "UUID of the network interface used for provisioning (PXE/rsync). If unset in config, the provider derives this from the first bootable interface (or first interface).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be valid UUID (RFC 4122)",
+					),
+				},
+			},
+			"provisioning_transport": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Provisioning transport (e.g. RSYNCDAEMON) as returned by BCM.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+
+			// ── Provisioning & boot ────────────────────────────────
+			"allow_networking_restart": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether networking restarts are allowed on this device.",
+			},
+			"boot_loader_file": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Boot loader file path override.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"disksetup": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Disk partitioning XML (root element must be <diskSetup>).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"install_boot_record": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether to install a boot record during provisioning.",
+			},
+			"install_mode": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Installation mode for the device.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"next_boot_install_mode": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Installation mode to use on next boot only.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"node_installer_disk": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether to use disk-based node installer.",
+			},
+			"pxelabel": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "PXE label for network boot.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"raidconf": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "RAID configuration.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"version_config_files": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether to version configuration files.",
+			},
+
+			// ── Kernel & performance ───────────────────────────────
+			"cpuspeed_governor": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "CPU frequency scaling governor.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"io_scheduler": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "I/O scheduler (e.g. noop, deadline, cfq).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"kernel_output_console": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Kernel console output device.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"kernel_version": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Kernel version override.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+
+			// ── Script hooks ───────────────────────────────────────
+			"custom_ping_script": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Custom ping health-check script.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"custom_ping_script_argument": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Argument passed to the custom ping script.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"custom_power_script": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Custom power management script.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"custom_power_script_argument": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Argument passed to the custom power script.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"custom_remote_console_script": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Custom remote console script.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"custom_remote_console_script_argument": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Argument passed to the custom remote console script.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"finalize": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Finalize script run at the end of provisioning.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"initialize": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Initialize script run at the start of provisioning.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+
+			// ── Exclude lists ──────────────────────────────────────
+			"exclude_list_full": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Exclude list for full provisioning.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"exclude_list_grab": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Exclude list for image grab.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"exclude_list_grabnew": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Exclude list for new image grab.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"exclude_list_manipulate_script": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Script for exclude list manipulation.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"exclude_list_sync": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Exclude list for sync provisioning.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"exclude_list_update": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Exclude list for update provisioning.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+
+			// ── Device flags ───────────────────────────────────────
+			"data_node": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether this device is a data node.",
+			},
+			"disable_fabric_nvme": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether to disable NVMe over Fabrics.",
+			},
+			"force_full_environment": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether to force a full environment during provisioning.",
+			},
+			"supports_gnss": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether this device supports GNSS.",
+			},
+			"template_node": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Whether this device is a template node.",
+			},
+
+			// ── Metadata & user-defined ────────────────────────────
+			"tag": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Device tag.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"use_exclusively_for": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Restrict device usage to a specific purpose.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"userdefined1": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "User-defined field 1.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"userdefined2": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "User-defined field 2.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+
+			// ── References ─────────────────────────────────────────
+			"rack": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Rack UUID reference (null if not assigned to a rack).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"software_image_proxy": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Software image proxy UUID reference.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+
+			// ── String lists ───────────────────────────────────────
+			"block_devices_cleared_on_next_boot": schema.ListAttribute{
+				Optional: true, Computed: true, ElementType: types.StringType,
+				MarkdownDescription: "Block devices to clear on next boot.",
+			},
+			"modules": schema.ListAttribute{
+				Optional: true, Computed: true, ElementType: types.StringType,
+				MarkdownDescription: "Kernel modules to load.",
+			},
+
+			// ── Complex objects (JSON-encoded) ─────────────────────
+			"bios_setup": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "BIOS setup configuration (JSON-encoded when non-null).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"bmc_settings": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "BMC settings configuration (JSON-encoded when non-null).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"extra_values": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "BCM extension key-values (JSON-encoded when non-null).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"proxy_settings": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Proxy settings (JSON-encoded when non-null).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"se_linux_settings": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "SELinux settings (JSON-encoded when non-null).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"time_zone_settings": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Timezone settings (JSON-encoded when non-null).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+
+			// ── Complex lists (JSON-encoded) ───────────────────────
+			"fsexports": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "NFS exports (JSON-encoded array when non-empty).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"fsmounts": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Filesystem mounts (JSON-encoded array when non-empty).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"gpu_settings": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "GPU settings (JSON-encoded array when non-empty).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"power_distribution_units": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Power distribution units (JSON-encoded array when non-empty).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"static_routes": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Static routes (JSON-encoded array when non-empty).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"switch_ports": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Switch port assignments (JSON-encoded array when non-empty).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"user_defined_resources": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "User-defined resources (JSON-encoded array when non-empty).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+
 			"roles": schema.SetAttribute{
 				Optional:    true,
 				Computed:    true,
@@ -422,6 +888,74 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 								useStateForUnknownUnlessNull(),
 							},
 						},
+						"bring_up_during_install": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether to bring the interface up during install (BCM: bringupduringinstall, e.g. NO).",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
+						},
+						"gateway": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Per-interface IPv4 gateway; BCM may return 0.0.0.0 when unset.",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`),
+									"must be a valid IPv4 address",
+								),
+							},
+						},
+						"lanchannel": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "IPMI LAN channel index when applicable.",
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
+						},
+						"on_network_priority": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Priority of this interface on its network.",
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
+						},
+						"vlanid": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "VLAN id for the interface (0 if none).",
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
+						},
+						"alternative_hostname": schema.StringAttribute{
+							Optional: true, Computed: true,
+							MarkdownDescription: "Alternative hostname for this interface.",
+							PlanModifiers:       []planmodifier.String{useStateForUnknownUnlessNull()},
+						},
+						"connected_mode": schema.BoolAttribute{
+							Optional: true, Computed: true,
+							MarkdownDescription: "Whether interface operates in connected mode (InfiniBand).",
+						},
+						"ipv6_dhcp": schema.BoolAttribute{
+							Optional: true, Computed: true,
+							MarkdownDescription: "Enable IPv6 DHCP for this interface.",
+						},
+						"speed": schema.StringAttribute{
+							Optional: true, Computed: true,
+							MarkdownDescription: "Link speed setting.",
+							PlanModifiers:       []planmodifier.String{useStateForUnknownUnlessNull()},
+						},
+						"additional_hostnames": schema.ListAttribute{
+							Optional: true, Computed: true, ElementType: types.StringType,
+							MarkdownDescription: "Additional hostnames associated with this interface.",
+						},
 					},
 				},
 			},
@@ -533,6 +1067,138 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 							Optional:            true,
 							Computed:            true,
 							MarkdownDescription: "Maximum number of snapshot files to retain. Default: 5.",
+						},
+					},
+				},
+			},
+			"services": schema.ListNestedBlock{
+				MarkdownDescription: "OS service configurations (BCM OSServiceConfig) attached to this device.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "BCM-assigned service config UUID.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Service name (e.g. nslcd).",
+						},
+						"base_type": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "BCM base type (typically OSServiceConfig).",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"add_from_role": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether this service entry was added from a role.",
+						},
+						"autostart": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether CMDaemon should restart a failed service.",
+						},
+						"belongs_to_role": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether this service belongs to a role assignment.",
+						},
+						"monitored": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether CMDaemon monitors the service.",
+						},
+						"ref_extra_uuid": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Extra reference UUID (often zero UUID).",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+									"must be valid UUID (RFC 4122)",
+								),
+							},
+						},
+						"ref_role_uuid": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Owning role UUID reference.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+									"must be valid UUID (RFC 4122)",
+								),
+							},
+						},
+						"run_if": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "When to run the service (e.g. ALWAYS).",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"script_timeout": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Service script timeout (-1 often means unlimited).",
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
+						},
+						"service_type": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "BCM service type enum value.",
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
+						},
+						"sickness_check_interval": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Interval between sickness checks (seconds).",
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
+						},
+						"sickness_check_script_timeout": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Timeout for sickness check script (seconds).",
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
+						},
+						"child_type": schema.StringAttribute{
+							Optional: true, Computed: true,
+							MarkdownDescription: "Service child type (e.g. OSServiceConfig).",
+							PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+						},
+						"from_generic_role": schema.BoolAttribute{
+							Optional: true, Computed: true,
+							MarkdownDescription: "Whether the service was inherited from a generic role.",
+						},
+						"internal": schema.BoolAttribute{
+							Optional: true, Computed: true,
+							MarkdownDescription: "Whether the service is an internal (system) service.",
+						},
+						"sickness_check_script": schema.StringAttribute{
+							Optional: true, Computed: true,
+							MarkdownDescription: "Custom script for sickness checking.",
+							PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 						},
 					},
 				},
@@ -817,6 +1483,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	// Normalize interface order to match plan order (prevents spurious diffs)
 	state.Interfaces = normalizeInterfaceOrder(state.Interfaces, plan.Interfaces)
 
+	state.Services = filterServicesToMatchConfig(state.Services, plan.Services)
+
 	// Handle Kubernetes roles - preserve state with computed defaults merged
 	// Only include roles if user defined them in plan
 	if len(plan.KubeletRoles) == 0 {
@@ -1100,6 +1768,10 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 			newState.BootLoaderProtocol = types.StringNull()
 		}
 
+		if state.Fips.IsNull() && !newState.Fips.IsNull() && newState.Fips.ValueString() == "CATEGORY" {
+			newState.Fips = types.StringNull()
+		}
+
 		// BCM may add partition if not explicitly set - preserve null from plan to avoid drift
 		if state.Partition.IsNull() && !newState.Partition.IsNull() {
 			newState.Partition = types.StringNull()
@@ -1142,6 +1814,10 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	// During import, keep interfaces from BCM as-is; during normal read, merge with state
 	if !isImport && len(state.Interfaces) > 0 && len(newState.Interfaces) > 0 {
 		newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, state.Interfaces)
+	}
+
+	if !isImport {
+		newState.Services = filterServicesToMatchConfig(newState.Services, state.Services)
 	}
 
 	// Preserve the distinction between omitted roles (null) and explicit empty roles ([]).
@@ -1394,6 +2070,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	// Normalize interface order to match plan order (prevents spurious diffs)
 	newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, plan.Interfaces)
 
+	newState.Services = filterServicesToMatchConfig(newState.Services, plan.Services)
+
 	// Handle Kubernetes roles - preserve state with computed defaults merged
 	// Only include roles if user defined them in plan
 	if len(plan.KubeletRoles) == 0 {
@@ -1534,6 +2212,11 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		deviceMAC = plan.MAC.ValueString()
 	}
 
+	provisioningIfaceFinal := provisioningInterfaceUUID
+	if !plan.ProvisioningInterface.IsNull() && !plan.ProvisioningInterface.IsUnknown() && plan.ProvisioningInterface.ValueString() != "" {
+		provisioningIfaceFinal = plan.ProvisioningInterface.ValueString()
+	}
+
 	entity := map[string]interface{}{
 		"baseType":              "Device",
 		"childType":             "PhysicalNode",
@@ -1542,7 +2225,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		"to_be_removed":         false,
 		"revision":              "",
 		"uuid":                  deviceUUID,
-		"provisioningInterface": provisioningInterfaceUUID,
+		"provisioningInterface": provisioningIfaceFinal,
 		"interfaces":            interfaces,
 	}
 
@@ -1575,6 +2258,102 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	// Hardware identifiers
 	SetStringField(entity, "serialNumber", plan.SerialNumber)
 	SetStringField(entity, "partNumber", plan.PartNumber)
+
+	SetStringField(entity, "cmdaemonUrl", plan.CmdaemonURL)
+	SetStringField(entity, "fips", plan.Fips)
+	SetStringField(entity, "fromTemplateNode", plan.FromTemplateNode)
+	SetInt64Field(entity, "indexInsideContainer", plan.IndexInsideContainer)
+	SetStringField(entity, "parentUuid", plan.ParentUUID)
+	if !plan.ParentUUID.IsNull() && !plan.ParentUUID.IsUnknown() && plan.ParentUUID.ValueString() != "" {
+		entity["parent_uuid"] = plan.ParentUUID.ValueString()
+	}
+	SetStringField(entity, "provisioningTransport", plan.ProvisioningTransport)
+
+	// Provisioning & boot
+	SetBoolField(entity, "allowNetworkingRestart", plan.AllowNetworkingRestart)
+	SetStringField(entity, "bootLoaderFile", plan.BootLoaderFile)
+	SetStringField(entity, "disksetup", plan.Disksetup)
+	SetBoolField(entity, "installBootRecord", plan.InstallBootRecord)
+	SetStringField(entity, "installMode", plan.InstallMode)
+	SetStringField(entity, "nextBootInstallMode", plan.NextBootInstallMode)
+	SetBoolField(entity, "nodeInstallerDisk", plan.NodeInstallerDisk)
+	SetStringField(entity, "pxelabel", plan.Pxelabel)
+	SetStringField(entity, "raidconf", plan.Raidconf)
+	SetBoolField(entity, "versionConfigFiles", plan.VersionConfigFiles)
+
+	// Kernel & performance
+	SetStringField(entity, "cpuspeedGovernor", plan.CpuspeedGovernor)
+	SetStringField(entity, "ioScheduler", plan.IoScheduler)
+	SetStringField(entity, "kernelOutputConsole", plan.KernelOutputConsole)
+	SetStringField(entity, "kernelVersion", plan.KernelVersion)
+
+	// Script hooks
+	SetStringField(entity, "customPingScript", plan.CustomPingScript)
+	SetStringField(entity, "customPingScriptArgument", plan.CustomPingScriptArgument)
+	SetStringField(entity, "customPowerScript", plan.CustomPowerScript)
+	SetStringField(entity, "customPowerScriptArgument", plan.CustomPowerScriptArgument)
+	SetStringField(entity, "customRemoteConsoleScript", plan.CustomRemoteConsoleScript)
+	SetStringField(entity, "customRemoteConsoleScriptArgument", plan.CustomRemoteConsoleScriptArgument)
+	SetStringField(entity, "finalize", plan.Finalize)
+	SetStringField(entity, "initialize", plan.Initialize)
+
+	// Exclude lists
+	SetStringField(entity, "excludeListFull", plan.ExcludeListFull)
+	SetStringField(entity, "excludeListGrab", plan.ExcludeListGrab)
+	SetStringField(entity, "excludeListGrabnew", plan.ExcludeListGrabnew)
+	SetStringField(entity, "excludeListManipulateScript", plan.ExcludeListManipulateScript)
+	SetStringField(entity, "excludeListSync", plan.ExcludeListSync)
+	SetStringField(entity, "excludeListUpdate", plan.ExcludeListUpdate)
+
+	// Device flags
+	SetBoolField(entity, "dataNode", plan.DataNode)
+	SetBoolField(entity, "disableFabricNVME", plan.DisableFabricNVME)
+	SetBoolField(entity, "forceFullEnvironment", plan.ForceFullEnvironment)
+	SetBoolField(entity, "supportsGNSS", plan.SupportsGNSS)
+	SetBoolField(entity, "templateNode", plan.TemplateNode)
+
+	// Metadata & user-defined
+	SetStringField(entity, "tag", plan.Tag)
+	SetStringField(entity, "useExclusivelyFor", plan.UseExclusivelyFor)
+	SetStringField(entity, "userdefined1", plan.Userdefined1)
+	SetStringField(entity, "userdefined2", plan.Userdefined2)
+
+	// References
+	SetJSONField(entity, "rack", plan.Rack)
+	SetJSONField(entity, "softwareImageProxy", plan.SoftwareImageProxy)
+
+	// String lists
+	if !plan.BlockDevicesClearedOnNextBoot.IsNull() && !plan.BlockDevicesClearedOnNextBoot.IsUnknown() {
+		var vals []string
+		plan.BlockDevicesClearedOnNextBoot.ElementsAs(context.Background(), &vals, false)
+		entity["blockDevicesClearedOnNextBoot"] = vals
+	}
+	if !plan.Modules.IsNull() && !plan.Modules.IsUnknown() {
+		var vals []string
+		plan.Modules.ElementsAs(context.Background(), &vals, false)
+		entity["modules"] = vals
+	}
+
+	// Complex objects
+	SetJSONField(entity, "biosSetup", plan.BiosSetup)
+	SetJSONField(entity, "bmcSettings", plan.BmcSettings)
+	SetJSONField(entity, "extra_values", plan.ExtraValues)
+	SetJSONField(entity, "proxySettings", plan.ProxySettings)
+	SetJSONField(entity, "seLinuxSettings", plan.SeLinuxSettings)
+	SetJSONField(entity, "timeZoneSettings", plan.TimeZoneSettings)
+
+	// Complex lists
+	SetJSONField(entity, "fsexports", plan.Fsexports)
+	SetJSONField(entity, "fsmounts", plan.Fsmounts)
+	SetJSONField(entity, "gpuSettings", plan.GpuSettings)
+	SetJSONField(entity, "powerDistributionUnits", plan.PowerDistributionUnits)
+	SetJSONField(entity, "staticRoutes", plan.StaticRoutes)
+	SetJSONField(entity, "switchPorts", plan.SwitchPorts)
+	SetJSONField(entity, "userDefinedResources", plan.UserDefinedResources)
+
+	if svc := buildDeviceServicesAPI(plan.Services); len(svc) > 0 {
+		entity["services"] = svc
+	}
 
 	// Legacy roles handling is done separately via lookupAndBuildRolesForEntity
 	// because it requires BCM API access to get full role objects
@@ -1858,6 +2637,37 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.ChildType = types.StringNull()
 	}
 
+	model.CmdaemonURL = getStringValue(data, "cmdaemonUrl")
+
+	if fips, ok := data["fips"].(string); ok && fips != "" && fips != "CATEGORY" {
+		model.Fips = types.StringValue(fips)
+	} else {
+		model.Fips = types.StringNull()
+	}
+
+	if ft, ok := data["fromTemplateNode"].(string); ok && ft != "" && ft != "00000000-0000-0000-0000-000000000000" {
+		model.FromTemplateNode = types.StringValue(ft)
+	} else {
+		model.FromTemplateNode = types.StringNull()
+	}
+
+	model.IndexInsideContainer = getInt64Value(data, "indexInsideContainer")
+
+	parentStr := getStringValue(data, "parentUuid")
+	if parentStr.IsNull() {
+		parentStr = getStringValue(data, "parent_uuid")
+	}
+	if !parentStr.IsNull() && parentStr.ValueString() == "00000000-0000-0000-0000-000000000000" {
+		model.ParentUUID = types.StringNull()
+	} else {
+		model.ParentUUID = parentStr
+	}
+
+	model.ProvisioningInterface = getStringValue(data, "provisioningInterface")
+	model.ProvisioningTransport = getStringValue(data, "provisioningTransport")
+
+	model.Services = parseDeviceServicesFromAPI(data["services"])
+
 	// Power control configuration
 	if powerControl, ok := data["powerControl"].(string); ok && powerControl != "" {
 		model.PowerControl = types.StringValue(powerControl)
@@ -1895,6 +2705,80 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.PartNumber = types.StringNull()
 	}
 
+	// Provisioning & boot
+	model.AllowNetworkingRestart = getBoolValue(data, "allowNetworkingRestart")
+	model.BootLoaderFile = getStringValue(data, "bootLoaderFile")
+	model.Disksetup = getStringValue(data, "disksetup")
+	model.InstallBootRecord = getBoolValue(data, "installBootRecord")
+	model.InstallMode = getStringValue(data, "installMode")
+	model.NextBootInstallMode = getStringValue(data, "nextBootInstallMode")
+	model.NodeInstallerDisk = getBoolValue(data, "nodeInstallerDisk")
+	model.Pxelabel = getStringValue(data, "pxelabel")
+	model.Raidconf = getStringValue(data, "raidconf")
+	model.VersionConfigFiles = getBoolValue(data, "versionConfigFiles")
+
+	// Kernel & performance
+	model.CpuspeedGovernor = getStringValue(data, "cpuspeedGovernor")
+	model.IoScheduler = getStringValue(data, "ioScheduler")
+	model.KernelOutputConsole = getStringValue(data, "kernelOutputConsole")
+	model.KernelVersion = getStringValue(data, "kernelVersion")
+
+	// Script hooks
+	model.CustomPingScript = getStringValue(data, "customPingScript")
+	model.CustomPingScriptArgument = getStringValue(data, "customPingScriptArgument")
+	model.CustomPowerScript = getStringValue(data, "customPowerScript")
+	model.CustomPowerScriptArgument = getStringValue(data, "customPowerScriptArgument")
+	model.CustomRemoteConsoleScript = getStringValue(data, "customRemoteConsoleScript")
+	model.CustomRemoteConsoleScriptArgument = getStringValue(data, "customRemoteConsoleScriptArgument")
+	model.Finalize = getStringValue(data, "finalize")
+	model.Initialize = getStringValue(data, "initialize")
+
+	// Exclude lists
+	model.ExcludeListFull = getStringValue(data, "excludeListFull")
+	model.ExcludeListGrab = getStringValue(data, "excludeListGrab")
+	model.ExcludeListGrabnew = getStringValue(data, "excludeListGrabnew")
+	model.ExcludeListManipulateScript = getStringValue(data, "excludeListManipulateScript")
+	model.ExcludeListSync = getStringValue(data, "excludeListSync")
+	model.ExcludeListUpdate = getStringValue(data, "excludeListUpdate")
+
+	// Device flags
+	model.DataNode = getBoolValue(data, "dataNode")
+	model.DisableFabricNVME = getBoolValue(data, "disableFabricNVME")
+	model.ForceFullEnvironment = getBoolValue(data, "forceFullEnvironment")
+	model.SupportsGNSS = getBoolValue(data, "supportsGNSS")
+	model.TemplateNode = getBoolValue(data, "templateNode")
+
+	// Metadata & user-defined
+	model.Tag = getStringValue(data, "tag")
+	model.UseExclusivelyFor = getStringValue(data, "useExclusivelyFor")
+	model.Userdefined1 = getStringValue(data, "userdefined1")
+	model.Userdefined2 = getStringValue(data, "userdefined2")
+
+	// References
+	model.Rack = getJSONValue(data, "rack")
+	model.SoftwareImageProxy = getJSONValue(data, "softwareImageProxy")
+
+	// String lists
+	model.BlockDevicesClearedOnNextBoot = GetStringListValue(data, "blockDevicesClearedOnNextBoot")
+	model.Modules = GetStringListValue(data, "modules")
+
+	// Complex objects (JSON-encoded)
+	model.BiosSetup = getJSONValue(data, "biosSetup")
+	model.BmcSettings = getJSONValue(data, "bmcSettings")
+	model.ExtraValues = getJSONValue(data, "extra_values")
+	model.ProxySettings = getJSONValue(data, "proxySettings")
+	model.SeLinuxSettings = getJSONValue(data, "seLinuxSettings")
+	model.TimeZoneSettings = getJSONValue(data, "timeZoneSettings")
+
+	// Complex lists (JSON-encoded)
+	model.Fsexports = getJSONValue(data, "fsexports")
+	model.Fsmounts = getJSONValue(data, "fsmounts")
+	model.GpuSettings = getJSONValue(data, "gpuSettings")
+	model.PowerDistributionUnits = getJSONValue(data, "powerDistributionUnits")
+	model.StaticRoutes = getJSONValue(data, "staticRoutes")
+	model.SwitchPorts = getJSONValue(data, "switchPorts")
+	model.UserDefinedResources = getJSONValue(data, "userDefinedResources")
+
 	// Force is not persisted by BCM, will be preserved from plan/state
 
 	// Parse interfaces from BCM response
@@ -1908,6 +2792,218 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	model.KubeletRoles, model.EtcdHostRoles = parseKubernetesRolesFromAPI(data["roles"])
 
 	return model
+}
+
+// deviceStringFromKeys returns the first non-empty string found under alternate JSON keys.
+func deviceStringFromKeys(m map[string]interface{}, keys ...string) types.String {
+	for _, k := range keys {
+		if v := getStringValue(m, k); !v.IsNull() {
+			return v
+		}
+	}
+	return types.StringNull()
+}
+
+// parseDeviceServicesFromAPI parses device.services[] from BCM into Terraform models.
+func parseDeviceServicesFromAPI(raw interface{}) []DeviceOSServiceConfigModel {
+	arr, ok := raw.([]interface{})
+	if !ok || len(arr) == 0 {
+		return nil
+	}
+	out := make([]DeviceOSServiceConfigModel, 0, len(arr))
+	for _, item := range arr {
+		sm, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		out = append(out, parseDeviceOSServiceFromAPI(sm))
+	}
+	return out
+}
+
+func parseDeviceOSServiceFromAPI(m map[string]interface{}) DeviceOSServiceConfigModel {
+	var out DeviceOSServiceConfigModel
+	out.UUID = getStringValue(m, "uuid")
+	out.Name = getStringValue(m, "name")
+	out.BaseType = getStringValue(m, "baseType")
+	out.AddFromRole = getBoolValue(m, "addFromRole")
+	if out.AddFromRole.IsNull() {
+		out.AddFromRole = getBoolValue(m, "add_from_role")
+	}
+	out.Autostart = getBoolValue(m, "autostart")
+	out.BelongsToRole = getBoolValue(m, "belongsToRole")
+	if out.BelongsToRole.IsNull() {
+		out.BelongsToRole = getBoolValue(m, "belongs_to_role")
+	}
+	out.Monitored = getBoolValue(m, "monitored")
+	out.RefExtraUUID = deviceStringFromKeys(m, "refExtraUuid", "ref_extra_uuid")
+	out.RefRoleUUID = deviceStringFromKeys(m, "refRoleUuid", "ref_role_uuid")
+	out.RunIf = deviceStringFromKeys(m, "runIf", "run_if")
+	out.ScriptTimeout = getInt64Value(m, "scriptTimeout")
+	if out.ScriptTimeout.IsNull() {
+		out.ScriptTimeout = getInt64Value(m, "script_timeout")
+	}
+	out.ServiceType = getInt64Value(m, "serviceType")
+	if out.ServiceType.IsNull() {
+		out.ServiceType = getInt64Value(m, "service_type")
+	}
+	out.SicknessCheckInterval = getInt64Value(m, "sicknessCheckInterval")
+	if out.SicknessCheckInterval.IsNull() {
+		out.SicknessCheckInterval = getInt64Value(m, "sickness_check_interval")
+	}
+	out.SicknessCheckScriptTimeout = getInt64Value(m, "sicknessCheckScriptTimeout")
+	if out.SicknessCheckScriptTimeout.IsNull() {
+		out.SicknessCheckScriptTimeout = getInt64Value(m, "sickness_check_script_timeout")
+	}
+	out.ChildType = deviceStringFromKeys(m, "childType", "child_type")
+	out.FromGenericRole = getBoolValue(m, "fromGenericRole")
+	if out.FromGenericRole.IsNull() {
+		out.FromGenericRole = getBoolValue(m, "from_generic_role")
+	}
+	out.Internal = getBoolValue(m, "internal")
+	out.SicknessCheckScript = deviceStringFromKeys(m, "sicknessCheckScript", "sickness_check_script")
+	return out
+}
+
+// filterServicesToMatchConfig returns only the BCM-returned services whose names
+// match a service in the configured list. This filters out role-injected services
+// (belongsToRole=true, addFromRole=true) that the user didn't explicitly configure,
+// preventing perpetual drift caused by BCM automatically adding services from roles.
+func filterServicesToMatchConfig(bcmServices, configuredServices []DeviceOSServiceConfigModel) []DeviceOSServiceConfigModel {
+	if len(configuredServices) == 0 {
+		return nil
+	}
+
+	configuredNames := make(map[string]struct{}, len(configuredServices))
+	for _, s := range configuredServices {
+		if !s.Name.IsNull() && !s.Name.IsUnknown() {
+			configuredNames[s.Name.ValueString()] = struct{}{}
+		}
+	}
+
+	if len(bcmServices) == 0 {
+		return configuredServices
+	}
+
+	var result []DeviceOSServiceConfigModel
+	for _, s := range bcmServices {
+		if !s.Name.IsNull() {
+			if _, ok := configuredNames[s.Name.ValueString()]; ok {
+				result = append(result, s)
+			}
+		}
+	}
+
+	if len(result) == 0 {
+		return configuredServices
+	}
+	return result
+}
+
+// buildDeviceServicesAPI builds BCM JSON for device.services from Terraform models.
+func buildDeviceServicesAPI(models []DeviceOSServiceConfigModel) []interface{} {
+	if len(models) == 0 {
+		return nil
+	}
+	out := make([]interface{}, 0, len(models))
+	for _, s := range models {
+		sm := map[string]interface{}{
+			"baseType":      "OSServiceConfig",
+			"modified":      true,
+			"to_be_removed": false,
+			"revision":      "",
+		}
+		if !s.BaseType.IsNull() && !s.BaseType.IsUnknown() && s.BaseType.ValueString() != "" {
+			sm["baseType"] = s.BaseType.ValueString()
+		}
+		SetStringField(sm, "uuid", s.UUID)
+		SetStringField(sm, "name", s.Name)
+
+		// Bools: always send explicit value (array elements are full-replacement)
+		if !s.AddFromRole.IsNull() && !s.AddFromRole.IsUnknown() {
+			sm["addFromRole"] = s.AddFromRole.ValueBool()
+		} else {
+			sm["addFromRole"] = false
+		}
+		if !s.Autostart.IsNull() && !s.Autostart.IsUnknown() {
+			sm["autostart"] = s.Autostart.ValueBool()
+		} else {
+			sm["autostart"] = false
+		}
+		if !s.BelongsToRole.IsNull() && !s.BelongsToRole.IsUnknown() {
+			sm["belongsToRole"] = s.BelongsToRole.ValueBool()
+		} else {
+			sm["belongsToRole"] = false
+		}
+		if !s.Monitored.IsNull() && !s.Monitored.IsUnknown() {
+			sm["monitored"] = s.Monitored.ValueBool()
+		} else {
+			sm["monitored"] = false
+		}
+
+		if !s.RefExtraUUID.IsNull() && !s.RefExtraUUID.IsUnknown() {
+			sm["ref_extra_uuid"] = s.RefExtraUUID.ValueString()
+		} else {
+			sm["ref_extra_uuid"] = "00000000-0000-0000-0000-000000000000"
+		}
+		if !s.RefRoleUUID.IsNull() && !s.RefRoleUUID.IsUnknown() {
+			sm["ref_role_uuid"] = s.RefRoleUUID.ValueString()
+		} else {
+			sm["ref_role_uuid"] = "00000000-0000-0000-0000-000000000000"
+		}
+
+		// Strings: send explicit default for array elements
+		if !s.RunIf.IsNull() && !s.RunIf.IsUnknown() {
+			sm["runIf"] = s.RunIf.ValueString()
+		} else {
+			sm["runIf"] = "ALWAYS"
+		}
+
+		// Ints: always send explicit value
+		if !s.ScriptTimeout.IsNull() && !s.ScriptTimeout.IsUnknown() {
+			sm["scriptTimeout"] = s.ScriptTimeout.ValueInt64()
+		} else {
+			sm["scriptTimeout"] = int64(-1)
+		}
+		if !s.ServiceType.IsNull() && !s.ServiceType.IsUnknown() {
+			sm["serviceType"] = s.ServiceType.ValueInt64()
+		} else {
+			sm["serviceType"] = int64(0)
+		}
+		if !s.SicknessCheckInterval.IsNull() && !s.SicknessCheckInterval.IsUnknown() {
+			sm["sicknessCheckInterval"] = s.SicknessCheckInterval.ValueInt64()
+		} else {
+			sm["sicknessCheckInterval"] = int64(60)
+		}
+		if !s.SicknessCheckScriptTimeout.IsNull() && !s.SicknessCheckScriptTimeout.IsUnknown() {
+			sm["sicknessCheckScriptTimeout"] = s.SicknessCheckScriptTimeout.ValueInt64()
+		} else {
+			sm["sicknessCheckScriptTimeout"] = int64(10)
+		}
+
+		if !s.ChildType.IsNull() && !s.ChildType.IsUnknown() {
+			sm["childType"] = s.ChildType.ValueString()
+		} else {
+			sm["childType"] = ""
+		}
+		if !s.FromGenericRole.IsNull() && !s.FromGenericRole.IsUnknown() {
+			sm["fromGenericRole"] = s.FromGenericRole.ValueBool()
+		} else {
+			sm["fromGenericRole"] = false
+		}
+		if !s.Internal.IsNull() && !s.Internal.IsUnknown() {
+			sm["internal"] = s.Internal.ValueBool()
+		} else {
+			sm["internal"] = false
+		}
+		if !s.SicknessCheckScript.IsNull() && !s.SicknessCheckScript.IsUnknown() {
+			sm["sicknessCheckScript"] = s.SicknessCheckScript.ValueString()
+		} else {
+			sm["sicknessCheckScript"] = ""
+		}
+		out = append(out, sm)
+	}
+	return out
 }
 
 // parseKubernetesRolesFromAPI extracts KubeletRole and EtcdHostRole from BCM device roles array.
