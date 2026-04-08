@@ -8,6 +8,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -268,6 +269,46 @@ func SetInt64Field(entity map[string]interface{}, key string, value types.Int64)
 func SetFloat64Field(entity map[string]interface{}, key string, value types.Float64) {
 	if !value.IsNull() && !value.IsUnknown() {
 		entity[key] = value.ValueFloat64()
+	}
+}
+
+// getJSONValue extracts a value from a map and returns it as a JSON-encoded string.
+// Handles complex BCM fields (objects, arrays) that cannot be modeled as native Terraform types.
+// Returns StringNull for nil, empty arrays ("[]"), and JSON "null".
+func getJSONValue(data map[string]interface{}, key string) types.String {
+	val, ok := data[key]
+	if !ok || val == nil {
+		return types.StringNull()
+	}
+	if str, ok := val.(string); ok {
+		if str == "" {
+			return types.StringNull()
+		}
+		return types.StringValue(str)
+	}
+	b, err := json.Marshal(val)
+	if err != nil {
+		return types.StringNull()
+	}
+	s := string(b)
+	if s == "null" || s == "[]" {
+		return types.StringNull()
+	}
+	return types.StringValue(s)
+}
+
+// SetJSONField sets a field on an entity from a JSON-encoded string value.
+// Unmarshals the string back to its native type (object/array) before setting.
+func SetJSONField(entity map[string]interface{}, key string, value types.String) {
+	if value.IsNull() || value.IsUnknown() {
+		return
+	}
+	str := value.ValueString()
+	var native interface{}
+	if json.Unmarshal([]byte(str), &native) == nil {
+		entity[key] = native
+	} else {
+		entity[key] = str
 	}
 }
 
