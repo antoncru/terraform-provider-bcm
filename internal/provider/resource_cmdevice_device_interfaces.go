@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -65,6 +66,36 @@ type DeviceInterfaceModel struct {
 	// Optional. Valid values: "802.3ad", "active-backup", "balance-rr", "balance-xor", etc.
 	BondMode types.String `tfsdk:"bond_mode"`
 
+	// BringUpDuringInstall controls whether the interface is brought up during install (BCM: bringupduringinstall).
+	BringUpDuringInstall types.String `tfsdk:"bring_up_during_install"`
+
+	// Gateway is the per-interface IPv4 gateway (BCM: gateway).
+	Gateway types.String `tfsdk:"gateway"`
+
+	// LanChannel is the IPMI LAN channel (BCM: lanchannel).
+	LanChannel types.Int64 `tfsdk:"lanchannel"`
+
+	// OnNetworkPriority is the interface priority on its network (BCM: onNetworkPriority).
+	OnNetworkPriority types.Int64 `tfsdk:"on_network_priority"`
+
+	// VlanID is the VLAN id when applicable (BCM: vlanid).
+	VlanID types.Int64 `tfsdk:"vlanid"`
+
+	// AlternativeHostname is an alternate hostname for this interface.
+	AlternativeHostname types.String `tfsdk:"alternative_hostname"`
+
+	// ConnectedMode indicates whether the interface operates in connected mode (e.g. InfiniBand).
+	ConnectedMode types.Bool `tfsdk:"connected_mode"`
+
+	// IPv6DHCP enables IPv6 DHCP for this interface.
+	IPv6DHCP types.Bool `tfsdk:"ipv6_dhcp"`
+
+	// Speed is the link speed setting for this interface.
+	Speed types.String `tfsdk:"speed"`
+
+	// AdditionalHostnames lists extra hostnames associated with this interface.
+	AdditionalHostnames types.List `tfsdk:"additional_hostnames"` // Element type: types.StringType
+
 	// ===== Computed Fields (From BCM API) =====
 
 	// UUID is the BCM-assigned interface identifier.
@@ -100,15 +131,15 @@ func interfaceTypeToBCMChildType(tfType string) string {
 
 // bcmChildTypeToInterfaceType maps BCM childType to Terraform interface type.
 func bcmChildTypeToInterfaceType(childType string) string {
-	switch childType {
-	case "NetworkPhysicalInterface":
+	switch strings.ToLower(childType) {
+	case "networkphysicalinterface":
 		return "physical"
-	case "NetworkBondInterface":
+	case "networkbondinterface":
 		return "bond"
-	case "NetworkBMCInterface":
+	case "networkbmcinterface":
 		return "bmc"
 	default:
-		return "physical" // Default fallback
+		return "physical"
 	}
 }
 
@@ -166,7 +197,58 @@ func buildInterfaceAPIEntity(iface DeviceInterfaceModel, existingUUID string) ma
 
 	// Standard BCM fields
 	entity["ipv6Dhcp"] = false
-	entity["bringupduringinstall"] = "NO"
+	if !iface.BringUpDuringInstall.IsNull() && !iface.BringUpDuringInstall.IsUnknown() {
+		entity["bringupduringinstall"] = iface.BringUpDuringInstall.ValueString()
+	} else {
+		entity["bringupduringinstall"] = "NO"
+	}
+
+	if !iface.Gateway.IsNull() && !iface.Gateway.IsUnknown() {
+		entity["gateway"] = iface.Gateway.ValueString()
+	} else {
+		entity["gateway"] = "0.0.0.0"
+	}
+	if !iface.LanChannel.IsNull() && !iface.LanChannel.IsUnknown() {
+		entity["lanchannel"] = iface.LanChannel.ValueInt64()
+	} else {
+		entity["lanchannel"] = int64(1)
+	}
+	if !iface.OnNetworkPriority.IsNull() && !iface.OnNetworkPriority.IsUnknown() {
+		entity["onNetworkPriority"] = iface.OnNetworkPriority.ValueInt64()
+	} else {
+		entity["onNetworkPriority"] = int64(0)
+	}
+	if !iface.VlanID.IsNull() && !iface.VlanID.IsUnknown() {
+		entity["vlanid"] = iface.VlanID.ValueInt64()
+	} else {
+		entity["vlanid"] = int64(0)
+	}
+
+	if !iface.AlternativeHostname.IsNull() && !iface.AlternativeHostname.IsUnknown() {
+		entity["alternativeHostname"] = iface.AlternativeHostname.ValueString()
+	} else {
+		entity["alternativeHostname"] = ""
+	}
+	if !iface.ConnectedMode.IsNull() && !iface.ConnectedMode.IsUnknown() {
+		entity["connectedMode"] = iface.ConnectedMode.ValueBool()
+	} else {
+		entity["connectedMode"] = false
+	}
+	if !iface.IPv6DHCP.IsNull() && !iface.IPv6DHCP.IsUnknown() {
+		entity["ipv6Dhcp"] = iface.IPv6DHCP.ValueBool()
+	}
+	if !iface.Speed.IsNull() && !iface.Speed.IsUnknown() {
+		entity["speed"] = iface.Speed.ValueString()
+	} else {
+		entity["speed"] = ""
+	}
+	if !iface.AdditionalHostnames.IsNull() && !iface.AdditionalHostnames.IsUnknown() {
+		var hosts []string
+		iface.AdditionalHostnames.ElementsAs(context.Background(), &hosts, false)
+		entity["additionalHostnames"] = hosts
+	} else {
+		entity["additionalHostnames"] = []string{}
+	}
 
 	// Card type based on interface type
 	switch iface.Type.ValueString() {
@@ -251,6 +333,35 @@ func parseInterfaceFromAPI(data map[string]interface{}) DeviceInterfaceModel {
 	}
 
 	model.BondMode = getStringValue(data, "bondMode")
+
+	// Extended interface fields (BCM JSON uses camelCase or lowercase keys)
+	model.BringUpDuringInstall = getStringValue(data, "bringupduringinstall")
+	if model.BringUpDuringInstall.IsNull() {
+		model.BringUpDuringInstall = getStringValue(data, "bringUpDuringInstall")
+	}
+	if gw := getStringValue(data, "gateway"); !gw.IsNull() && gw.ValueString() != "" && gw.ValueString() != "0.0.0.0" {
+		model.Gateway = gw
+	} else {
+		model.Gateway = types.StringNull()
+	}
+	model.LanChannel = getInt64Value(data, "lanchannel")
+	if model.LanChannel.IsNull() {
+		model.LanChannel = getInt64Value(data, "lanChannel")
+	}
+	model.OnNetworkPriority = getInt64Value(data, "onNetworkPriority")
+	if model.OnNetworkPriority.IsNull() {
+		model.OnNetworkPriority = getInt64Value(data, "on_network_priority")
+	}
+	model.VlanID = getInt64Value(data, "vlanid")
+	if model.VlanID.IsNull() {
+		model.VlanID = getInt64Value(data, "vlanId")
+	}
+
+	model.AlternativeHostname = getStringValue(data, "alternativeHostname")
+	model.ConnectedMode = getBoolValue(data, "connectedMode")
+	model.IPv6DHCP = getBoolValue(data, "ipv6Dhcp")
+	model.Speed = getStringValue(data, "speed")
+	model.AdditionalHostnames = GetStringListValue(data, "additionalHostnames")
 
 	return model
 }
@@ -352,6 +463,31 @@ func mergeInterfaceWithPlan(parsed DeviceInterfaceModel, plan DeviceInterfaceMod
 		if parsed.BondMode.IsNull() && !plan.BondMode.IsNull() && !plan.BondMode.IsUnknown() {
 			result.BondMode = plan.BondMode
 		}
+	}
+
+	if parsed.BringUpDuringInstall.IsNull() && !plan.BringUpDuringInstall.IsNull() && !plan.BringUpDuringInstall.IsUnknown() {
+		result.BringUpDuringInstall = plan.BringUpDuringInstall
+	}
+	if parsed.Gateway.IsNull() && !plan.Gateway.IsNull() && !plan.Gateway.IsUnknown() {
+		result.Gateway = plan.Gateway
+	}
+	if parsed.LanChannel.IsNull() && !plan.LanChannel.IsNull() && !plan.LanChannel.IsUnknown() {
+		result.LanChannel = plan.LanChannel
+	}
+	if parsed.OnNetworkPriority.IsNull() && !plan.OnNetworkPriority.IsNull() && !plan.OnNetworkPriority.IsUnknown() {
+		result.OnNetworkPriority = plan.OnNetworkPriority
+	}
+	if parsed.VlanID.IsNull() && !plan.VlanID.IsNull() && !plan.VlanID.IsUnknown() {
+		result.VlanID = plan.VlanID
+	}
+	if parsed.AlternativeHostname.IsNull() && !plan.AlternativeHostname.IsNull() && !plan.AlternativeHostname.IsUnknown() {
+		result.AlternativeHostname = plan.AlternativeHostname
+	}
+	if parsed.Speed.IsNull() && !plan.Speed.IsNull() && !plan.Speed.IsUnknown() {
+		result.Speed = plan.Speed
+	}
+	if parsed.AdditionalHostnames.IsNull() && !plan.AdditionalHostnames.IsNull() && !plan.AdditionalHostnames.IsUnknown() {
+		result.AdditionalHostnames = plan.AdditionalHostnames
 	}
 
 	return result
