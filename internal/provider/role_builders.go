@@ -8,6 +8,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -341,10 +342,10 @@ func ExtractKubernetesRolesFromDevice(roles []interface{}) ([]map[string]interfa
 
 		childType, _ := roleMap["childType"].(string)
 
-		switch childType {
-		case "KubeletRole":
+		switch strings.ToLower(childType) {
+		case "kubeletrole":
 			kubeletRoles = append(kubeletRoles, roleMap)
-		case "EtcdHostRole":
+		case "etcdhostrole":
 			etcdHostRoles = append(etcdHostRoles, roleMap)
 		}
 	}

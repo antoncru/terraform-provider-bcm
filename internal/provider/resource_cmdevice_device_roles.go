@@ -7,6 +7,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 )
 
 // =============================================================================
@@ -221,12 +222,12 @@ func mergeDeviceRoles(
 		childType, _ := role["childType"].(string)
 		uuid, _ := role["uuid"].(string)
 
-		switch childType {
-		case "KubeletRole":
+		switch strings.ToLower(childType) {
+		case "kubeletrole":
 			if cluster, ok := role["kubeCluster"].(string); ok && uuid != "" {
 				existingKubeletUUIDs[cluster] = uuid
 			}
-		case "EtcdHostRole":
+		case "etcdhostrole":
 			if cluster, ok := role["etcdCluster"].(string); ok && uuid != "" {
 				existingEtcdUUIDs[cluster] = uuid
 			}
@@ -271,8 +272,8 @@ func mergeDeviceRoles(
 	for _, role := range existingRoles {
 		childType, _ := role["childType"].(string)
 
-		switch childType {
-		case "KubeletRole":
+		switch strings.ToLower(childType) {
+		case "kubeletrole":
 			// If newKubeletRoles is nil, preserve all existing KubeletRoles
 			if newKubeletRoles == nil {
 				result = append(result, role)
@@ -290,7 +291,7 @@ func mergeDeviceRoles(
 			}
 			// If cluster IS in kubeletClusters, it will be replaced by new role
 
-		case "EtcdHostRole":
+		case "etcdhostrole":
 			// If newEtcdHostRoles is nil, preserve all existing EtcdHostRoles
 			if newEtcdHostRoles == nil {
 				result = append(result, role)

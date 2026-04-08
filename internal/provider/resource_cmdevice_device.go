@@ -1761,14 +1761,14 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 
 		// BCM returns "CATEGORY" for boot_loader/boot_loader_protocol when inheriting from category
 		// Preserve null/empty plan values to avoid drift
-		if state.BootLoader.IsNull() && newState.BootLoader.ValueString() == "CATEGORY" {
+		if state.BootLoader.IsNull() && strings.EqualFold(newState.BootLoader.ValueString(), "CATEGORY") {
 			newState.BootLoader = types.StringNull()
 		}
-		if state.BootLoaderProtocol.IsNull() && newState.BootLoaderProtocol.ValueString() == "CATEGORY" {
+		if state.BootLoaderProtocol.IsNull() && strings.EqualFold(newState.BootLoaderProtocol.ValueString(), "CATEGORY") {
 			newState.BootLoaderProtocol = types.StringNull()
 		}
 
-		if state.Fips.IsNull() && !newState.Fips.IsNull() && newState.Fips.ValueString() == "CATEGORY" {
+		if state.Fips.IsNull() && !newState.Fips.IsNull() && strings.EqualFold(newState.Fips.ValueString(), "CATEGORY") {
 			newState.Fips = types.StringNull()
 		}
 
@@ -2609,14 +2609,14 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 
 	// BCM returns "CATEGORY" for devices inheriting boot_loader from their category.
 	// Map to null — the user never sets this value; omitting it preserves inheritance.
-	if bootLoader, ok := data["bootLoader"].(string); ok && bootLoader != "" && bootLoader != "CATEGORY" {
+	if bootLoader, ok := data["bootLoader"].(string); ok && bootLoader != "" && !strings.EqualFold(bootLoader, "CATEGORY") {
 		model.BootLoader = types.StringValue(bootLoader)
 	} else {
 		model.BootLoader = types.StringNull()
 	}
 
 	// Same CATEGORY handling for boot_loader_protocol.
-	if bootLoaderProtocol, ok := data["bootLoaderProtocol"].(string); ok && bootLoaderProtocol != "" && bootLoaderProtocol != "CATEGORY" {
+	if bootLoaderProtocol, ok := data["bootLoaderProtocol"].(string); ok && bootLoaderProtocol != "" && !strings.EqualFold(bootLoaderProtocol, "CATEGORY") {
 		model.BootLoaderProtocol = types.StringValue(bootLoaderProtocol)
 	} else {
 		model.BootLoaderProtocol = types.StringNull()
@@ -2639,7 +2639,7 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 
 	model.CmdaemonURL = getStringValue(data, "cmdaemonUrl")
 
-	if fips, ok := data["fips"].(string); ok && fips != "" && fips != "CATEGORY" {
+	if fips, ok := data["fips"].(string); ok && fips != "" && !strings.EqualFold(fips, "CATEGORY") {
 		model.Fips = types.StringValue(fips)
 	} else {
 		model.Fips = types.StringNull()
@@ -3028,10 +3028,10 @@ func parseKubernetesRolesFromAPI(rolesData interface{}) ([]KubeletRoleModel, []E
 		}
 
 		childType, _ := roleMap["childType"].(string)
-		switch childType {
-		case "KubeletRole":
+		switch strings.ToLower(childType) {
+		case "kubeletrole":
 			kubeletRoles = append(kubeletRoles, parseKubeletRoleFromAPI(roleMap))
-		case "EtcdHostRole":
+		case "etcdhostrole":
 			etcdHostRoles = append(etcdHostRoles, parseEtcdHostRoleFromAPI(roleMap))
 		}
 	}
