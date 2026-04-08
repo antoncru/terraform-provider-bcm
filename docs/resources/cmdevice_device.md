@@ -822,21 +822,69 @@ resource "bcm_cmdevice_device" "server" {
 
 ### Optional
 
+- `allow_networking_restart` (Boolean) Whether networking restarts are allowed on this device.
+- `bios_setup` (String) BIOS setup configuration (JSON-encoded when non-null).
+- `block_devices_cleared_on_next_boot` (List of String) Block devices to clear on next boot.
+- `bmc_settings` (String) BMC settings configuration (JSON-encoded when non-null).
 - `boot_loader` (String) Boot loader type (e.g., SYSLINUX, GRUB) - defaults to category value
+- `boot_loader_file` (String) Boot loader file path override.
 - `boot_loader_protocol` (String) Boot loader protocol (e.g., HTTP, TFTP) - defaults to category value
+- `cmdaemon_url` (String) CMDaemon URL for this device (returned by BCM).
+- `cpuspeed_governor` (String) CPU frequency scaling governor.
+- `custom_ping_script` (String) Custom ping health-check script.
+- `custom_ping_script_argument` (String) Argument passed to the custom ping script.
+- `custom_power_script` (String) Custom power management script.
+- `custom_power_script_argument` (String) Argument passed to the custom power script.
+- `custom_remote_console_script` (String) Custom remote console script.
+- `custom_remote_console_script_argument` (String) Argument passed to the custom remote console script.
+- `data_node` (Boolean) Whether this device is a data node.
 - `default_gateway` (String) Default gateway IP address for the device
 - `default_gateway_metric` (Number) Default gateway metric/priority (lower is preferred)
+- `disable_fabric_nvme` (Boolean) Whether to disable NVMe over Fabrics.
+- `disksetup` (String) Disk partitioning XML (root element must be <diskSetup>).
 - `etcd_host_role` (Block List) Etcd host role configuration. Defines this device as a member of an EtcdCluster. Each etcd_host_role block associates the device with one EtcdCluster as an etcd node. (see [below for nested schema](#nestedblock--etcd_host_role))
+- `exclude_list_full` (String) Exclude list for full provisioning.
+- `exclude_list_grab` (String) Exclude list for image grab.
+- `exclude_list_grabnew` (String) Exclude list for new image grab.
+- `exclude_list_manipulate_script` (String) Script for exclude list manipulation.
+- `exclude_list_sync` (String) Exclude list for sync provisioning.
+- `exclude_list_update` (String) Exclude list for update provisioning.
+- `extra_values` (String) BCM extension key-values (JSON-encoded when non-null).
+- `finalize` (String) Finalize script run at the end of provisioning.
+- `fips` (String) FIPS mode; BCM may return CATEGORY when inherited from the category.
 - `force` (Boolean) Force operation (override BCM validation warnings)
+- `force_full_environment` (Boolean) Whether to force a full environment during provisioning.
+- `from_template_node` (String) Template node UUID reference (zero UUID means not from a template).
+- `fsexports` (String) NFS exports (JSON-encoded array when non-empty).
+- `fsmounts` (String) Filesystem mounts (JSON-encoded array when non-empty).
+- `gpu_settings` (String) GPU settings (JSON-encoded array when non-empty).
+- `index_inside_container` (Number) Index of this device inside its container entity.
+- `initialize` (String) Initialize script run at the start of provisioning.
+- `install_boot_record` (Boolean) Whether to install a boot record during provisioning.
+- `install_mode` (String) Installation mode for the device.
 - `interfaces` (Block List) Network interface configurations for the device. At least one interface is required. Each interface can be physical, bond, or BMC type. (see [below for nested schema](#nestedblock--interfaces))
+- `io_scheduler` (String) I/O scheduler (e.g. noop, deadline, cfq).
+- `kernel_output_console` (String) Kernel console output device.
 - `kernel_parameters` (String) Kernel boot parameters
+- `kernel_version` (String) Kernel version override.
 - `kubelet_role` (Block List) Kubernetes kubelet role configuration. Defines this device as a member of a KubeCluster. Each kubelet_role block associates the device with one KubeCluster as a control plane node, worker node, or both. (see [below for nested schema](#nestedblock--kubelet_role))
 - `mac` (String) Device MAC address, computed from the first interface. Can be set explicitly to override.
 - `management_network` (String) Management network UUID reference. Optional — if not specified, the device has no management network set.
+- `modules` (List of String) Kernel modules to load.
+- `next_boot_install_mode` (String) Installation mode to use on next boot only.
+- `node_installer_disk` (Boolean) Whether to use disk-based node installer.
 - `notes` (String) Device notes/description
+- `parent_uuid` (String) Parent entity UUID when applicable.
 - `part_number` (String) Hardware part number
 - `partition` (String) Partition UUID reference (uses category default if not specified)
-- `power_control` (String) Power control method (e.g., 'none', 'ipmi', 'pdu', 'redfish', 'custom')
+- `power_control` (String) Power control method: 'none', 'ipmi', 'pdu', 'redfish', 'custom', or an IPMI interface reference such as 'ipmi0' (BCM returns the BMC interface name when using IPMI).
+- `power_distribution_units` (String) Power distribution units (JSON-encoded array when non-empty).
+- `provisioning_interface` (String) UUID of the network interface used for provisioning (PXE/rsync). If unset in config, the provider derives this from the first bootable interface (or first interface).
+- `provisioning_transport` (String) Provisioning transport (e.g. RSYNCDAEMON) as returned by BCM.
+- `proxy_settings` (String) Proxy settings (JSON-encoded when non-null).
+- `pxelabel` (String) PXE label for network boot.
+- `rack` (String) Rack UUID reference (null if not assigned to a rack).
+- `raidconf` (String) RAID configuration.
 - `roles` (Set of String) Set of role names assigned to this device. Roles define the device's function in the cluster (e.g., "backup", "provisioning", "boot"). Use the `bcm_cmdevice_roles` data source to discover available roles. **Only role names are accepted** (not UUIDs). Role names are case-sensitive.
 
 Example usage:
@@ -850,7 +898,21 @@ resource "bcm_cmdevice_device" "node" {
   roles = [data.bcm_cmdevice_roles.all.roles[0].name]
 }
 ```
+- `se_linux_settings` (String) SELinux settings (JSON-encoded when non-null).
 - `serial_number` (String) Hardware serial number
+- `services` (Block List) OS service configurations (BCM OSServiceConfig) attached to this device. (see [below for nested schema](#nestedblock--services))
+- `software_image_proxy` (String) Software image proxy UUID reference.
+- `static_routes` (String) Static routes (JSON-encoded array when non-empty).
+- `supports_gnss` (Boolean) Whether this device supports GNSS.
+- `switch_ports` (String) Switch port assignments (JSON-encoded array when non-empty).
+- `tag` (String) Device tag.
+- `template_node` (Boolean) Whether this device is a template node.
+- `time_zone_settings` (String) Timezone settings (JSON-encoded when non-null).
+- `use_exclusively_for` (String) Restrict device usage to a specific purpose.
+- `user_defined_resources` (String) User-defined resources (JSON-encoded array when non-empty).
+- `userdefined1` (String) User-defined field 1.
+- `userdefined2` (String) User-defined field 2.
+- `version_config_files` (Boolean) Whether to version configuration files.
 
 ### Read-Only
 
@@ -893,15 +955,25 @@ Required:
 
 Optional:
 
+- `additional_hostnames` (List of String) Additional hostnames associated with this interface.
+- `alternative_hostname` (String) Alternative hostname for this interface.
 - `bond_mode` (String) Bond mode (e.g., '802.3ad', 'active-backup', 'balance-rr'). Only applicable when type is 'bond'.
 - `bootable` (Boolean) Enable PXE boot capability. Default: false. First bootable interface becomes provisioning interface.
+- `bring_up_during_install` (String) Whether to bring the interface up during install (BCM: bringupduringinstall, e.g. NO).
+- `connected_mode` (Boolean) Whether interface operates in connected mode (InfiniBand).
 - `dhcp` (Boolean) Enable DHCP for IP assignment. Default: true.
+- `gateway` (String) Per-interface IPv4 gateway; BCM may return 0.0.0.0 when unset.
 - `ip` (String) Static IPv4 address.
+- `ipv6_dhcp` (Boolean) Enable IPv6 DHCP for this interface.
 - `ipv6_ip` (String) Static IPv6 address.
+- `lanchannel` (Number) IPMI LAN channel index when applicable.
 - `mac` (String) MAC address (format: 00:11:22:33:44:55). Required for physical interfaces on create.
 - `members` (List of String) Member interface names for bond type. Required when type is 'bond'.
 - `network` (String) Network UUID reference for interface assignment.
+- `on_network_priority` (Number) Priority of this interface on its network.
+- `speed` (String) Link speed setting.
 - `start_if` (String) Interface startup condition: 'ALWAYS', 'NEVER', 'HOTPLUG'. Default: 'ALWAYS'.
+- `vlanid` (Number) VLAN id for the interface (0 if none).
 
 Read-Only:
 
@@ -930,6 +1002,37 @@ Optional:
 Read-Only:
 
 - `uuid` (String) BCM-assigned role UUID.
+
+
+<a id="nestedblock--services"></a>
+### Nested Schema for `services`
+
+Required:
+
+- `name` (String) Service name (e.g. nslcd).
+
+Optional:
+
+- `add_from_role` (Boolean) Whether this service entry was added from a role.
+- `autostart` (Boolean) Whether CMDaemon should restart a failed service.
+- `base_type` (String) BCM base type (typically OSServiceConfig).
+- `belongs_to_role` (Boolean) Whether this service belongs to a role assignment.
+- `child_type` (String) Service child type (e.g. OSServiceConfig).
+- `from_generic_role` (Boolean) Whether the service was inherited from a generic role.
+- `internal` (Boolean) Whether the service is an internal (system) service.
+- `monitored` (Boolean) Whether CMDaemon monitors the service.
+- `ref_extra_uuid` (String) Extra reference UUID (often zero UUID).
+- `ref_role_uuid` (String) Owning role UUID reference.
+- `run_if` (String) When to run the service (e.g. ALWAYS).
+- `script_timeout` (Number) Service script timeout (-1 often means unlimited).
+- `service_type` (Number) BCM service type enum value.
+- `sickness_check_interval` (Number) Interval between sickness checks (seconds).
+- `sickness_check_script` (String) Custom script for sickness checking.
+- `sickness_check_script_timeout` (Number) Timeout for sickness check script (seconds).
+
+Read-Only:
+
+- `uuid` (String) BCM-assigned service config UUID.
 
 ## Import
 
