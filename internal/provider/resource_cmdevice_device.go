@@ -2263,10 +2263,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	SetStringField(entity, "fips", plan.Fips)
 	SetStringField(entity, "fromTemplateNode", plan.FromTemplateNode)
 	SetInt64Field(entity, "indexInsideContainer", plan.IndexInsideContainer)
-	SetStringField(entity, "parentUuid", plan.ParentUUID)
-	if !plan.ParentUUID.IsNull() && !plan.ParentUUID.IsUnknown() && plan.ParentUUID.ValueString() != "" {
-		entity["parent_uuid"] = plan.ParentUUID.ValueString()
-	}
+	SetStringField(entity, "parent_uuid", plan.ParentUUID)
 	SetStringField(entity, "provisioningTransport", plan.ProvisioningTransport)
 
 	// Provisioning & boot
