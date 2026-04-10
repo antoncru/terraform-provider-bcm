@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/action"
@@ -86,7 +87,7 @@ func testAccGetTestDeviceID(t *testing.T) string {
 			continue
 		}
 
-		if containsSubstr(hostname, "master") || containsSubstr(hostname, "head") {
+		if strings.Contains(hostname, "master") || strings.Contains(hostname, "head") {
 			t.Logf("Skipping potential management node: %s (safety)", hostname)
 			continue
 		}
@@ -412,7 +413,7 @@ func TestAccCMDevicePowerAction_VerifyPowerOperationAPI(t *testing.T) {
 			_, err := client.CallJSONRPC(ctx, "cmdevice", "powerOperation", payload)
 			if err != nil {
 				errStr := err.Error()
-				if containsSubstr(errStr, "method not found") || containsSubstr(errStr, "unknown method") {
+				if strings.Contains(errStr, "method not found") || strings.Contains(errStr, "unknown method") {
 					t.Errorf("BCM API cmdevice.powerOperation does not exist: %v", err)
 				} else {
 					t.Logf("powerOperation %s exists but returned error (may be expected): %v", op, err)
@@ -457,19 +458,3 @@ func TestAccCMDevicePowerAction_HeadNodeSafety(t *testing.T) {
 	}
 }
 
-// containsSubstr checks if a string contains a substring.
-func containsSubstr(s, substr string) bool {
-	return len(s) >= len(substr) && findSubstr(s, substr)
-}
-
-func findSubstr(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
