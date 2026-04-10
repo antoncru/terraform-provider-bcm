@@ -10,9 +10,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/action"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 // ============================================================================
@@ -55,66 +53,60 @@ func testAccActionPreCheck(t *testing.T) {
 	}
 }
 
-// testAccGetTestDeviceID returns a device ID for power action tests.
-// Returns empty string if BCM_TEST_DEVICE_ID is not set (test will be skipped).
+// testAccGetTestDeviceID returns a device UUID for power action tests.
+// Returns empty string if BCM_TEST_DEVICE_ID is not set and no safe device is found.
 // SAFETY: Excludes head nodes to prevent accidental disruption of cluster management.
 func testAccGetTestDeviceID(t *testing.T) string {
 	deviceID := os.Getenv("BCM_TEST_DEVICE_ID")
-	if deviceID == "" {
-		// Try to find a safe device from the BCM cluster (not a head node)
-		client := createTestBCMClient(t)
-		ctx := context.Background()
+	if deviceID != "" {
+		return deviceID
+	}
 
-		// Query for available nodes
-		body, err := client.CallJSONRPC(ctx, "cmdevice", "getNodes")
-		if err != nil {
-			t.Logf("Could not query nodes: %v", err)
-			return ""
-		}
+	client := createTestBCMClient(t)
+	ctx := context.Background()
 
-		var nodes []map[string]interface{}
-		if err := json.Unmarshal(body, &nodes); err != nil {
-			t.Logf("Could not parse nodes response: %v", err)
-			return ""
-		}
-
-		// Find first available non-head node with a UUID
-		// SAFETY: Skip HeadNode types to prevent cluster management disruption
-		for _, node := range nodes {
-			childType, _ := node["childType"].(string)
-			hostname, _ := node["hostname"].(string)
-
-			// Skip head nodes - these manage the cluster
-			if childType == "HeadNode" {
-				t.Logf("Skipping head node: %s (safety)", hostname)
-				continue
-			}
-
-			// Skip nodes with "master" or "head" in name (additional safety)
-			if containsSubstr(hostname, "master") || containsSubstr(hostname, "head") {
-				t.Logf("Skipping potential management node: %s (safety)", hostname)
-				continue
-			}
-
-			if uuid, ok := node["uuid"].(string); ok && uuid != "" {
-				t.Logf("Using discovered device for test: %s (UUID: %s, type: %s)", hostname, uuid, childType)
-				return uuid
-			}
-		}
-
-		t.Log("No safe test devices found in BCM cluster (all are head nodes or no UUID)")
+	body, err := client.CallJSONRPC(ctx, "cmdevice", "getNodes")
+	if err != nil {
+		t.Logf("Could not query nodes: %v", err)
 		return ""
 	}
-	return deviceID
+
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		t.Logf("Could not parse nodes response: %v", err)
+		return ""
+	}
+
+	for _, node := range nodes {
+		childType, _ := node["childType"].(string)
+		hostname, _ := node["hostname"].(string)
+
+		if childType == "HeadNode" {
+			t.Logf("Skipping head node: %s (safety)", hostname)
+			continue
+		}
+
+		if containsSubstr(hostname, "master") || containsSubstr(hostname, "head") {
+			t.Logf("Skipping potential management node: %s (safety)", hostname)
+			continue
+		}
+
+		if uuid, ok := node["uuid"].(string); ok && uuid != "" {
+			t.Logf("Using discovered device for test: %s (UUID: %s, type: %s)", hostname, uuid, childType)
+			return uuid
+		}
+	}
+
+	t.Log("No safe test devices found in BCM cluster (all are head nodes or no UUID)")
+	return ""
 }
 
-// createTestActionWithClient creates a CMDevicePowerAction with configured BCM client.
+// createTestActionWithClient creates a CMDevicePowerAction configured with a real BCM client.
 func createTestActionWithClient(t *testing.T) *CMDevicePowerAction {
 	client := createTestBCMClient(t)
 
 	a := &CMDevicePowerAction{}
 
-	// Configure action with BCM client
 	configReq := action.ConfigureRequest{
 		ProviderData: client,
 	}
@@ -128,73 +120,36 @@ func createTestActionWithClient(t *testing.T) *CMDevicePowerAction {
 	return a
 }
 
-// buildActionConfig creates a tfsdk.Config for testing action invocation.
-//
-//nolint:unused // Reserved for future use when terraform-plugin-testing supports Actions
-func buildActionConfig(t *testing.T, deviceID, powerAction string, waitForCompletion bool, timeout string) tfsdk.Config {
-	// Get schema for the action
-	a := NewCMDevicePowerAction()
-	schemaReq := action.SchemaRequest{}
-	schemaResp := &action.SchemaResponse{}
-	a.Schema(context.Background(), schemaReq, schemaResp)
+// callPowerOperation calls cmdevice.powerOperation using the same payload
+// structure as the provider's Invoke method.
+func callPowerOperation(t *testing.T, client *BCMClient, deviceUUID, operation string, force bool) {
+	t.Helper()
+	ctx := context.Background()
 
-	if schemaResp.Diagnostics.HasError() {
-		t.Fatalf("Failed to get action schema: %v", schemaResp.Diagnostics)
+	payload := powerOperationPayload{
+		BaseType:  "PowerOperation",
+		Devices:   []string{deviceUUID},
+		Operation: operation,
+		Force:     force,
+		Wait:      true,
 	}
 
-	// Build attribute types map for the object type
-	attrTypes := make(map[string]tftypes.Type)
-	for name, attr := range schemaResp.Schema.Attributes {
-		switch attr.(type) {
-		case action_schema_StringAttribute:
-			attrTypes[name] = tftypes.String
-		case action_schema_BoolAttribute:
-			attrTypes[name] = tftypes.Bool
-		default:
-			attrTypes[name] = tftypes.String // Default to string
-		}
-	}
+	payloadJSON, _ := json.Marshal(payload)
+	t.Logf("powerOperation payload: %s", string(payloadJSON))
 
-	// For simplicity, we'll build the config values directly
-	// Build config values
-	configValues := map[string]tftypes.Value{
-		"device_id":           tftypes.NewValue(tftypes.String, deviceID),
-		"power_action":        tftypes.NewValue(tftypes.String, powerAction),
-		"wait_for_completion": tftypes.NewValue(tftypes.Bool, waitForCompletion),
-		"timeout":             tftypes.NewValue(tftypes.String, timeout),
-	}
-
-	objectType := tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			"device_id":           tftypes.String,
-			"power_action":        tftypes.String,
-			"wait_for_completion": tftypes.Bool,
-			"timeout":             tftypes.String,
-		},
-	}
-
-	rawConfig := tftypes.NewValue(objectType, configValues)
-
-	return tfsdk.Config{
-		Raw:    rawConfig,
-		Schema: schemaResp.Schema,
+	_, err := client.CallJSONRPC(ctx, "cmdevice", "powerOperation", payload)
+	if err != nil {
+		t.Logf("powerOperation %s returned error (may be expected depending on device state): %v", operation, err)
+	} else {
+		t.Logf("powerOperation %s completed successfully", operation)
 	}
 }
-
-// Placeholder types to satisfy type assertions in buildActionConfig.
-// These are used only for type checking in the switch statement.
-//
-//nolint:unused // Reserved for future use when terraform-plugin-testing supports Actions
-type action_schema_StringAttribute = interface{ IsRequired() bool }
-
-//nolint:unused // Reserved for future use when terraform-plugin-testing supports Actions
-type action_schema_BoolAttribute = interface{ IsOptional() bool }
 
 // ============================================================================
 // Acceptance Tests
 // ============================================================================
 
-// TestAccCMDevicePowerAction_PowerOn tests the power_on action.
+// TestAccCMDevicePowerAction_PowerOn tests the power_on (ON) operation via powerOperation.
 func TestAccCMDevicePowerAction_PowerOn(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -204,33 +159,19 @@ func TestAccCMDevicePowerAction_PowerOn(t *testing.T) {
 	}
 
 	a := createTestActionWithClient(t)
-	ctx := context.Background()
+	client := createTestBCMClient(t)
 
-	// Build configuration model directly
+	t.Logf("Testing power_on action for device UUID: %s", deviceID)
+
+	// Verify the action model populates correctly
 	config := CMDevicePowerActionModel{
 		DeviceID:          types.StringValue(deviceID),
 		PowerAction:       types.StringValue("power_on"),
+		Force:             types.BoolValue(true),
 		WaitForCompletion: types.BoolNull(),
 		Timeout:           types.StringNull(),
 	}
 
-	// Create a mock InvokeRequest with the config
-	// Since terraform-plugin-framework doesn't expose a way to build InvokeRequest,
-	// we'll call the BCM API directly to verify the operation
-	t.Logf("Testing power_on action for device: %s", deviceID)
-
-	// Call BCM API directly using CallJSONRPCArg (mimicking what Invoke does)
-	// BCM power methods use "arg" (single value) format
-	client := createTestBCMClient(t)
-	_, err := client.CallJSONRPCArg(ctx, "cmdevice", "powerOn", deviceID)
-	if err != nil {
-		// Log but don't fail - device might already be on or BMC unreachable
-		t.Logf("Power on operation returned error (may be expected): %v", err)
-	} else {
-		t.Logf("Power on operation completed successfully for device: %s", deviceID)
-	}
-
-	// Verify config model is correctly populated
 	if config.DeviceID.ValueString() != deviceID {
 		t.Errorf("Expected device_id %q, got %q", deviceID, config.DeviceID.ValueString())
 	}
@@ -238,11 +179,12 @@ func TestAccCMDevicePowerAction_PowerOn(t *testing.T) {
 		t.Errorf("Expected power_action %q, got %q", "power_on", config.PowerAction.ValueString())
 	}
 
-	// Verify action interface
-	_ = a // Ensure action was created
+	callPowerOperation(t, client, deviceID, "ON", true)
+
+	_ = a
 }
 
-// TestAccCMDevicePowerAction_PowerOff tests the power_off action.
+// TestAccCMDevicePowerAction_PowerOff tests the power_off (OFF) operation via powerOperation.
 func TestAccCMDevicePowerAction_PowerOff(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -251,23 +193,15 @@ func TestAccCMDevicePowerAction_PowerOff(t *testing.T) {
 		t.Skip("BCM_TEST_DEVICE_ID not set and no devices found in cluster")
 	}
 
-	ctx := context.Background()
 	client := createTestBCMClient(t)
 
-	t.Logf("Testing power_off action for device: %s", deviceID)
+	t.Logf("Testing power_off action for device UUID: %s", deviceID)
 
-	// Call BCM API directly using CallJSONRPCArg
-	_, err := client.CallJSONRPCArg(ctx, "cmdevice", "powerOff", deviceID)
-	if err != nil {
-		// Log but don't fail - device might already be off or BMC unreachable
-		t.Logf("Power off operation returned error (may be expected): %v", err)
-	} else {
-		t.Logf("Power off operation completed successfully for device: %s", deviceID)
-	}
+	callPowerOperation(t, client, deviceID, "OFF", true)
 }
 
-// TestAccCMDevicePowerAction_Reboot tests the reboot action.
-func TestAccCMDevicePowerAction_Reboot(t *testing.T) {
+// TestAccCMDevicePowerAction_Reset tests the reset (RESET) operation via powerOperation.
+func TestAccCMDevicePowerAction_Reset(t *testing.T) {
 	testAccActionPreCheck(t)
 
 	deviceID := testAccGetTestDeviceID(t)
@@ -275,23 +209,14 @@ func TestAccCMDevicePowerAction_Reboot(t *testing.T) {
 		t.Skip("BCM_TEST_DEVICE_ID not set and no devices found in cluster")
 	}
 
-	ctx := context.Background()
 	client := createTestBCMClient(t)
 
-	t.Logf("Testing reboot action for device: %s", deviceID)
+	t.Logf("Testing reset action for device UUID: %s", deviceID)
 
-	// Call BCM API directly using CallJSONRPCArg (reboot uses "arg" format)
-	body, err := client.CallJSONRPCArg(ctx, "cmdevice", "reboot", deviceID)
-	if err != nil {
-		// Log but don't fail - device might be off or BMC unreachable
-		t.Logf("Reboot operation returned error (may be expected): %v", err)
-	} else {
-		t.Logf("Reboot operation completed successfully for device: %s", deviceID)
-		t.Logf("Response: %s", string(body))
-	}
+	callPowerOperation(t, client, deviceID, "RESET", true)
 }
 
-// TestAccCMDevicePowerAction_PowerCycle tests the power_cycle action.
+// TestAccCMDevicePowerAction_PowerCycle tests the power_cycle (CYCLE) operation via powerOperation.
 func TestAccCMDevicePowerAction_PowerCycle(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -300,50 +225,63 @@ func TestAccCMDevicePowerAction_PowerCycle(t *testing.T) {
 		t.Skip("BCM_TEST_DEVICE_ID not set and no devices found in cluster")
 	}
 
-	ctx := context.Background()
 	client := createTestBCMClient(t)
 
-	t.Logf("Testing power_cycle action for device: %s", deviceID)
+	t.Logf("Testing power_cycle action for device UUID: %s", deviceID)
 
-	// Call BCM API directly using CallJSONRPCArg
-	_, err := client.CallJSONRPCArg(ctx, "cmdevice", "powerCycle", deviceID)
-	if err != nil {
-		// Log but don't fail - device might be off or BMC unreachable
-		t.Logf("Power cycle operation returned error (may be expected): %v", err)
-	} else {
-		t.Logf("Power cycle operation completed successfully for device: %s", deviceID)
-	}
+	callPowerOperation(t, client, deviceID, "CYCLE", true)
 }
 
-// TestAccCMDevicePowerAction_InvalidDevice tests error handling for invalid device.
+// TestAccCMDevicePowerAction_InvalidDevice tests error handling for invalid device UUID.
 func TestAccCMDevicePowerAction_InvalidDevice(t *testing.T) {
 	testAccActionPreCheck(t)
 
 	ctx := context.Background()
 	client := createTestBCMClient(t)
 
-	// Use a clearly invalid device ID
-	invalidDeviceID := "non-existent-device-12345"
+	invalidDeviceID := "00000000-0000-0000-0000-000000000000"
 
-	t.Logf("Testing power_on action with invalid device: %s", invalidDeviceID)
+	t.Logf("Testing powerOperation with invalid device UUID: %s", invalidDeviceID)
 
-	// Call BCM API directly using CallJSONRPCArg - should return an error
-	_, err := client.CallJSONRPCArg(ctx, "cmdevice", "powerOn", invalidDeviceID)
+	payload := powerOperationPayload{
+		BaseType:  "PowerOperation",
+		Devices:   []string{invalidDeviceID},
+		Operation: "RESET",
+		Force:     true,
+		Wait:      true,
+	}
+
+	_, err := client.CallJSONRPC(ctx, "cmdevice", "powerOperation", payload)
 	if err == nil {
-		t.Error("Expected error for invalid device, but got none")
+		t.Error("Expected error for invalid device UUID, but got none")
 	} else {
 		t.Logf("Correctly received error for invalid device: %v", err)
 	}
 }
 
-// TestAccCMDevicePowerAction_ActionWithConfigure tests Configure interface.
+// TestAccCMDevicePowerAction_ForceFlag tests that force=false is sent correctly.
+func TestAccCMDevicePowerAction_ForceFlag(t *testing.T) {
+	testAccActionPreCheck(t)
+
+	deviceID := testAccGetTestDeviceID(t)
+	if deviceID == "" {
+		t.Skip("BCM_TEST_DEVICE_ID not set and no devices found in cluster")
+	}
+
+	client := createTestBCMClient(t)
+
+	t.Logf("Testing powerOperation with force=false for device UUID: %s", deviceID)
+
+	callPowerOperation(t, client, deviceID, "RESET", false)
+}
+
+// TestAccCMDevicePowerAction_ActionWithConfigure tests the Configure interface with a real client.
 func TestAccCMDevicePowerAction_ActionWithConfigure(t *testing.T) {
 	testAccActionPreCheck(t)
 
 	a := NewCMDevicePowerAction()
 	ctx := context.Background()
 
-	// Test Configure method with real BCM client
 	client := createTestBCMClient(t)
 
 	configReq := action.ConfigureRequest{
@@ -351,7 +289,6 @@ func TestAccCMDevicePowerAction_ActionWithConfigure(t *testing.T) {
 	}
 	configResp := &action.ConfigureResponse{}
 
-	// Type assert to ActionWithConfigure
 	configurable, ok := a.(action.ActionWithConfigure)
 	if !ok {
 		t.Fatal("Action does not implement ActionWithConfigure interface")
@@ -366,27 +303,26 @@ func TestAccCMDevicePowerAction_ActionWithConfigure(t *testing.T) {
 	t.Log("ActionWithConfigure interface test passed")
 }
 
-// TestAccCMDevicePowerAction_PowerMethodMapping tests method mapping with real API.
-func TestAccCMDevicePowerAction_PowerMethodMapping(t *testing.T) {
+// TestAccCMDevicePowerAction_PowerOperationMapping tests operation mapping values.
+func TestAccCMDevicePowerAction_PowerOperationMapping(t *testing.T) {
 	testAccActionPreCheck(t)
 
-	// Verify all power method mappings are correct
 	expectedMappings := map[string]string{
-		"power_on":    "powerOn",
-		"power_off":   "powerOff",
-		"reboot":      "reboot",
-		"power_cycle": "powerCycle",
+		"power_on":    "ON",
+		"power_off":   "OFF",
+		"reset":       "RESET",
+		"power_cycle": "CYCLE",
 	}
 
-	for tfAction, bcmMethod := range expectedMappings {
+	for tfAction, bcmOp := range expectedMappings {
 		t.Run(tfAction, func(t *testing.T) {
-			result, exists := powerMethodMapping[tfAction]
+			result, exists := powerOperationMapping[tfAction]
 			if !exists {
 				t.Errorf("Mapping for %q does not exist", tfAction)
 				return
 			}
-			if result != bcmMethod {
-				t.Errorf("Expected %q to map to %q, got %q", tfAction, bcmMethod, result)
+			if result != bcmOp {
+				t.Errorf("Expected %q to map to %q, got %q", tfAction, bcmOp, result)
 			}
 		})
 	}
@@ -408,7 +344,6 @@ func TestAccCMDevicePowerAction_SchemaValidation(t *testing.T) {
 		t.Fatalf("Schema returned errors: %v", schemaResp.Diagnostics)
 	}
 
-	// Verify required attributes
 	requiredAttrs := []string{"device_id", "power_action"}
 	for _, attr := range requiredAttrs {
 		if _, exists := schemaResp.Schema.Attributes[attr]; !exists {
@@ -416,8 +351,7 @@ func TestAccCMDevicePowerAction_SchemaValidation(t *testing.T) {
 		}
 	}
 
-	// Verify optional attributes
-	optionalAttrs := []string{"wait_for_completion", "timeout"}
+	optionalAttrs := []string{"force", "wait_for_completion", "timeout"}
 	for _, attr := range optionalAttrs {
 		if _, exists := schemaResp.Schema.Attributes[attr]; !exists {
 			t.Errorf("Optional attribute %q missing from schema", attr)
@@ -449,8 +383,8 @@ func TestAccCMDevicePowerAction_Metadata(t *testing.T) {
 	t.Logf("Action type name: %s", metadataResp.TypeName)
 }
 
-// TestAccCMDevicePowerAction_VerifyBCMAPIMethods tests that BCM API methods exist.
-func TestAccCMDevicePowerAction_VerifyBCMAPIMethods(t *testing.T) {
+// TestAccCMDevicePowerAction_VerifyPowerOperationAPI tests that cmdevice.powerOperation exists.
+func TestAccCMDevicePowerAction_VerifyPowerOperationAPI(t *testing.T) {
 	testAccActionPreCheck(t)
 
 	deviceID := testAccGetTestDeviceID(t)
@@ -461,32 +395,68 @@ func TestAccCMDevicePowerAction_VerifyBCMAPIMethods(t *testing.T) {
 	ctx := context.Background()
 	client := createTestBCMClient(t)
 
-	// Test each power method to verify it exists in the BCM API
-	// We don't care if it succeeds (device state may vary), just that the method exists
-	methods := []string{"powerOn", "powerOff", "reboot", "powerCycle"}
+	operations := []string{"ON", "OFF", "RESET", "CYCLE"}
 
-	for _, method := range methods {
-		t.Run(method, func(t *testing.T) {
-			t.Logf("Verifying BCM API method: cmdevice.%s", method)
+	for _, op := range operations {
+		t.Run(op, func(t *testing.T) {
+			t.Logf("Verifying BCM API: cmdevice.powerOperation with operation=%s", op)
 
-			_, err := client.CallJSONRPCArg(ctx, "cmdevice", method, deviceID)
+			payload := powerOperationPayload{
+				BaseType:  "PowerOperation",
+				Devices:   []string{deviceID},
+				Operation: op,
+				Force:     true,
+				Wait:      true,
+			}
+
+			_, err := client.CallJSONRPC(ctx, "cmdevice", "powerOperation", payload)
 			if err != nil {
-				// Check if it's a "method not found" error vs a runtime error
 				errStr := err.Error()
 				if containsSubstr(errStr, "method not found") || containsSubstr(errStr, "unknown method") {
-					t.Errorf("BCM API method %q does not exist: %v", method, err)
+					t.Errorf("BCM API cmdevice.powerOperation does not exist: %v", err)
 				} else {
-					// Method exists but operation failed (e.g., device state, BMC issue)
-					t.Logf("Method %q exists but returned error (may be expected): %v", method, err)
+					t.Logf("powerOperation %s exists but returned error (may be expected): %v", op, err)
 				}
 			} else {
-				t.Logf("Method %q verified successfully", method)
+				t.Logf("powerOperation %s verified successfully", op)
 			}
 		})
 	}
 }
 
-// Note: Using the contains function from bcm_client.go.
+// TestAccCMDevicePowerAction_HeadNodeSafety verifies that head nodes are detected correctly.
+func TestAccCMDevicePowerAction_HeadNodeSafety(t *testing.T) {
+	testAccActionPreCheck(t)
+
+	ctx := context.Background()
+	client := createTestBCMClient(t)
+
+	body, err := client.CallJSONRPC(ctx, "cmdevice", "getNodes")
+	if err != nil {
+		t.Fatalf("Could not query nodes: %v", err)
+	}
+
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		t.Fatalf("Could not parse nodes response: %v", err)
+	}
+
+	foundHeadNode := false
+	for _, node := range nodes {
+		childType, _ := node["childType"].(string)
+		hostname, _ := node["hostname"].(string)
+
+		if childType == "HeadNode" {
+			foundHeadNode = true
+			t.Logf("Verified head node detected: %s (childType=%s) — provider would block power ops", hostname, childType)
+		}
+	}
+
+	if !foundHeadNode {
+		t.Log("No head nodes found in cluster — head node safety check could not be verified")
+	}
+}
+
 // containsSubstr checks if a string contains a substring.
 func containsSubstr(s, substr string) bool {
 	return len(s) >= len(substr) && findSubstr(s, substr)

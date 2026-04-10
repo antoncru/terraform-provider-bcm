@@ -61,7 +61,7 @@ func TestCMDevicePowerAction_Schema(t *testing.T) {
 	}
 
 	// Verify optional attributes exist
-	optionalAttrs := []string{"wait_for_completion", "timeout"}
+	optionalAttrs := []string{"force", "wait_for_completion", "timeout"}
 	for _, attr := range optionalAttrs {
 		if _, exists := resp.Schema.Attributes[attr]; !exists {
 			t.Errorf("Expected optional attribute %q not found in schema", attr)
@@ -93,6 +93,7 @@ func TestCMDevicePowerAction_SchemaAttributeTypes(t *testing.T) {
 	}{
 		{"device_id is required", "device_id", true},
 		{"power_action is required", "power_action", true},
+		{"force is optional", "force", false},
 		{"wait_for_completion is optional", "wait_for_completion", false},
 		{"timeout is optional", "timeout", false},
 	}
@@ -112,23 +113,23 @@ func TestCMDevicePowerAction_SchemaAttributeTypes(t *testing.T) {
 	}
 }
 
-// TestPowerMethodMapping verifies the power action to BCM method mapping.
-func TestPowerMethodMapping(t *testing.T) {
+// TestPowerOperationMapping verifies the power action to BCM operation mapping.
+func TestPowerOperationMapping(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
 		input    string
 		expected string
 	}{
-		{"power_on", "powerOn"},
-		{"power_off", "powerOff"},
-		{"reboot", "reboot"},
-		{"power_cycle", "powerCycle"},
+		{"power_on", "ON"},
+		{"power_off", "OFF"},
+		{"reset", "RESET"},
+		{"power_cycle", "CYCLE"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
-			result, exists := powerMethodMapping[tc.input]
+			result, exists := powerOperationMapping[tc.input]
 			if !exists {
 				t.Fatalf("Expected mapping for %q to exist", tc.input)
 			}
@@ -139,15 +140,15 @@ func TestPowerMethodMapping(t *testing.T) {
 	}
 }
 
-// TestPowerMethodMapping_InvalidValues verifies invalid power actions are not mapped.
-func TestPowerMethodMapping_InvalidValues(t *testing.T) {
+// TestPowerOperationMapping_InvalidValues verifies invalid power actions are not mapped.
+func TestPowerOperationMapping_InvalidValues(t *testing.T) {
 	t.Parallel()
 
-	invalidValues := []string{"invalid", "POWER_ON", "PowerOn", "shutdown", "restart", ""}
+	invalidValues := []string{"invalid", "POWER_ON", "PowerOn", "shutdown", "restart", "reboot", ""}
 
 	for _, val := range invalidValues {
 		t.Run(val, func(t *testing.T) {
-			_, exists := powerMethodMapping[val]
+			_, exists := powerOperationMapping[val]
 			if exists {
 				t.Errorf("Expected no mapping for invalid value %q", val)
 			}
@@ -224,17 +225,17 @@ func TestCMDevicePowerAction_Configure_WrongType(t *testing.T) {
 func TestCMDevicePowerAction_PowerActionValidValues(t *testing.T) {
 	t.Parallel()
 
-	validValues := []string{"power_on", "power_off", "reboot", "power_cycle"}
+	validValues := []string{"power_on", "power_off", "reset", "power_cycle"}
 
 	for _, val := range validValues {
-		_, exists := powerMethodMapping[val]
+		_, exists := powerOperationMapping[val]
 		if !exists {
 			t.Errorf("Expected %q to be a valid power_action value", val)
 		}
 	}
 
 	// Verify we have exactly 4 valid values
-	if len(powerMethodMapping) != 4 {
-		t.Errorf("Expected 4 power_action values, got %d", len(powerMethodMapping))
+	if len(powerOperationMapping) != 4 {
+		t.Errorf("Expected 4 power_action values, got %d", len(powerOperationMapping))
 	}
 }
