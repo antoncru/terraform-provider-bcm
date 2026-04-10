@@ -54,8 +54,10 @@ resource "bcm_cmdevice_device" "new_worker" {
 
 # Action to power on the newly created device
 action "bcm_cmdevice_power" "boot_new_worker" {
-  device_id    = bcm_cmdevice_device.new_worker.uuid
-  power_action = "power_on"
+  config {
+    device_id    = bcm_cmdevice_device.new_worker.uuid
+    power_action = "power_on"
+  }
 }
 
 # Output the device UUID for reference

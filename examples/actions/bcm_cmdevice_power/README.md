@@ -4,7 +4,7 @@ This example demonstrates how to use the `bcm_cmdevice_power` action to execute 
 
 ## Requirements
 
-- Terraform 1.14 or later (actions are a new Terraform 1.14 feature)
+- Terraform 1.14 or later (actions are a new Terraform 1.14 feature; use a nested **`config { }`** block for `device_id` / `power_action`)
 - BCM API endpoint and credentials
 - Target device UUID or hostname
 
@@ -80,8 +80,10 @@ resource "bcm_cmdevice_device" "worker" {
 }
 
 action "bcm_cmdevice_power" "boot_worker" {
-  device_id    = bcm_cmdevice_device.worker.uuid
-  power_action = "power_on"
+  config {
+    device_id    = bcm_cmdevice_device.worker.uuid
+    power_action = "power_on"
+  }
 }
 ```
 
@@ -91,10 +93,12 @@ The `wait_for_completion` attribute is reserved for future functionality:
 
 ```hcl
 action "bcm_cmdevice_power" "shutdown" {
-  device_id           = var.device_uuid
-  power_action        = "power_off"
-  wait_for_completion = true  # Wait for device to power off
-  timeout             = "2m"  # Timeout after 2 minutes
+  config {
+    device_id           = var.device_uuid
+    power_action        = "power_off"
+    wait_for_completion = true  # Wait for device to power off
+    timeout             = "2m"  # Timeout after 2 minutes
+  }
 }
 ```
 

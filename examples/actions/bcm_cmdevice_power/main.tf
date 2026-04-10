@@ -29,26 +29,34 @@ provider "bcm" {
 
 # Example 1: Power on a device by UUID
 action "bcm_cmdevice_power" "power_on_by_uuid" {
-  device_id    = var.device_uuid
-  power_action = "power_on"
+  config {
+    device_id    = var.device_uuid
+    power_action = "power_on"
+  }
 }
 
 # Example 2: Reboot a device by hostname
 action "bcm_cmdevice_power" "reboot_by_hostname" {
-  device_id    = var.device_hostname
-  power_action = "reboot"
+  config {
+    device_id    = var.device_hostname
+    power_action = "reboot"
+  }
 }
 
 # Example 3: Power off with wait for completion (future feature)
 action "bcm_cmdevice_power" "shutdown" {
-  device_id           = var.device_uuid
-  power_action        = "power_off"
-  wait_for_completion = true
-  timeout             = "2m"
+  config {
+    device_id           = var.device_uuid
+    power_action        = "power_off"
+    wait_for_completion = true
+    timeout             = "2m"
+  }
 }
 
 # Example 4: Power cycle a device
 action "bcm_cmdevice_power" "power_cycle" {
-  device_id    = var.device_uuid
-  power_action = "power_cycle"
+  config {
+    device_id    = var.device_uuid
+    power_action = "power_cycle"
+  }
 }
