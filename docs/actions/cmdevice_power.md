@@ -2,14 +2,14 @@
 page_title: "bcm_cmdevice_power Action - bcm"
 subcategory: ""
 description: |-
-  Execute power operations on BCM-managed devices.
+  Execute power operations on BCM-managed devices via cmdevice.powerOperation.
 ---
 
 # bcm_cmdevice_power (Action)
 
 ~> **Note:** Actions require Terraform 1.14 or later.
 
-Execute power operations on BCM-managed devices. This action allows you to power on, power off, reboot, or power cycle devices managed by BCM.
+Execute power operations on BCM-managed devices via `cmdevice.powerOperation`. This action allows you to power on, power off, reset, or power cycle devices managed by BCM.
 
 ## Example Usage
 
@@ -17,12 +17,12 @@ Execute power operations on BCM-managed devices. This action allows you to power
 # Example: BCM CMDevice Power Action
 #
 # This example demonstrates how to use the bcm_cmdevice_power action
-# to execute power operations on BCM-managed devices.
+# to execute power operations on BCM-managed devices via cmdevice.powerOperation.
 #
 # Requirements:
 # - Terraform 1.14 or later
 # - BCM API endpoint and credentials
-# - Target device UUID or hostname
+# - Target device UUID (powerOperation requires UUIDs, not hostnames)
 
 terraform {
   required_providers {
@@ -51,19 +51,20 @@ action "bcm_cmdevice_power" "power_on_by_uuid" {
   }
 }
 
-# Example 2: Reboot a device by hostname
-action "bcm_cmdevice_power" "reboot_by_hostname" {
+# Example 2: Reset (graceful reboot) a device by UUID
+action "bcm_cmdevice_power" "reset_by_uuid" {
   config {
-    device_id    = var.device_hostname
-    power_action = "reboot"
+    device_id    = var.device_uuid
+    power_action = "reset"
   }
 }
 
-# Example 3: Power off with wait for completion (future feature)
+# Example 3: Power off with wait for completion
 action "bcm_cmdevice_power" "shutdown" {
   config {
     device_id           = var.device_uuid
     power_action        = "power_off"
+    force               = true
     wait_for_completion = true
     timeout             = "2m"
   }
@@ -83,14 +84,15 @@ action "bcm_cmdevice_power" "power_cycle" {
 
 ### Required
 
-- `device_id` (String) BCM device identifier (UUID or hostname). Use `bcm_cmdevice_device.name.uuid` to reference a managed device.
-- `power_action` (String) Power operation to execute:
-  - `power_on`: Power on device via BMC
-  - `power_off`: Power off device via BMC
-  - `reboot`: Graceful device reboot
-  - `power_cycle`: Hard power cycle (off/on)
+- `device_id` (String) BCM device UUID. Use `bcm_cmdevice_device.name.uuid` for managed devices.
+- `power_action` (String) Power operation to execute (maps to BCM `PowerOperation` operation):
+  - `power_on`: Power on device via BMC (ON)
+  - `power_off`: Power off device via BMC (OFF)
+  - `reset`: Graceful device reset via BMC (RESET)
+  - `power_cycle`: Hard power cycle off/on (CYCLE)
 
 ### Optional
 
+- `force` (Boolean) Force the power operation. Default: `true`.
 - `timeout` (String) Timeout duration when `wait_for_completion` is enabled. Uses Go duration format (e.g., `5m`, `30s`). Default: `5m`. Range: 10s-30m.
 - `wait_for_completion` (Boolean) Wait for power state change to complete before returning. Default: `false`.

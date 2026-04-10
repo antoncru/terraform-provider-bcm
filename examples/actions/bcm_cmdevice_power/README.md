@@ -1,12 +1,12 @@
 # BCM CMDevice Power Action Example
 
-This example demonstrates how to use the `bcm_cmdevice_power` action to execute power operations on BCM-managed devices.
+This example demonstrates how to use the `bcm_cmdevice_power` action to execute power operations on BCM-managed devices via `cmdevice.powerOperation`.
 
 ## Requirements
 
-- Terraform 1.14 or later (actions are a new Terraform 1.14 feature; use a nested **`config { }`** block for `device_id` / `power_action`)
+- Terraform 1.14 or later (actions are a new Terraform 1.14 feature; use a nested **`config { }`** block for provider attributes)
 - BCM API endpoint and credentials
-- Target device UUID or hostname
+- Target device UUID (`powerOperation` requires UUIDs — the provider resolves hostnames to UUIDs via `getNode` but UUIDs are preferred)
 
 ## Usage
 
@@ -17,7 +17,6 @@ export BCM_ENDPOINT="https://172.21.15.254:8081"
 export BCM_USERNAME="root"
 export BCM_PASSWORD="your-password"
 export TF_VAR_device_uuid="2870c0b0-6fda-4026-9b8f-28be4c372fee"
-export TF_VAR_device_hostname="node001"
 ```
 
 ### 2. Initialize Terraform
@@ -40,8 +39,8 @@ Actions can be invoked directly using the `-invoke` flag:
 # Power on a device
 terraform apply -invoke="action.bcm_cmdevice_power.power_on_by_uuid"
 
-# Reboot a device
-terraform apply -invoke="action.bcm_cmdevice_power.reboot_by_hostname"
+# Reset (graceful reboot) a device
+terraform apply -invoke="action.bcm_cmdevice_power.reset_by_uuid"
 
 # Power cycle a device
 terraform apply -invoke="action.bcm_cmdevice_power.power_cycle"
@@ -49,20 +48,41 @@ terraform apply -invoke="action.bcm_cmdevice_power.power_cycle"
 
 ## Power Actions
 
-| Action | Description |
-|--------|-------------|
-| `power_on` | Power on device via BMC/IPMI |
-| `power_off` | Power off device via BMC/IPMI |
-| `reboot` | Graceful device reboot |
-| `power_cycle` | Hard power cycle (off/on) |
+All operations use `cmdevice.powerOperation` with a structured `PowerOperation` payload.
+
+| `power_action` | BCM Operation | Description |
+|----------------|---------------|-------------|
+| `power_on`     | `ON`          | Power on device via BMC/IPMI |
+| `power_off`    | `OFF`         | Power off device via BMC/IPMI |
+| `reset`        | `RESET`       | Graceful device reset via BMC |
+| `power_cycle`  | `CYCLE`       | Hard power cycle off/on |
+
+## Additional Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `force` | bool | `true` | Force the power operation |
+| `wait_for_completion` | bool | `false` | Wait for power state change to complete |
+| `timeout` | string | `"5m"` | Timeout when `wait_for_completion` is enabled |
 
 ## Device Identification
 
-The `device_id` attribute accepts either:
-- **UUID**: `"2870c0b0-6fda-4026-9b8f-28be4c372fee"`
-- **Hostname**: `"node001"`
+The `device_id` attribute accepts a BCM device **UUID**. Use `bcm_cmdevice_device.name.uuid` for managed devices:
 
-## Lifecycle Triggers (Future)
+```hcl
+action "bcm_cmdevice_power" "reset_node" {
+  config {
+    device_id    = bcm_cmdevice_device.worker.uuid
+    power_action = "reset"
+  }
+}
+```
+
+## Safety
+
+The provider blocks power operations on **HeadNode** devices to prevent cluster management disruption.
+
+## Lifecycle Triggers
 
 Actions can be triggered by resource lifecycle events:
 
@@ -87,23 +107,9 @@ action "bcm_cmdevice_power" "boot_worker" {
 }
 ```
 
-## Wait for Completion (Future)
-
-The `wait_for_completion` attribute is reserved for future functionality:
-
-```hcl
-action "bcm_cmdevice_power" "shutdown" {
-  config {
-    device_id           = var.device_uuid
-    power_action        = "power_off"
-    wait_for_completion = true  # Wait for device to power off
-    timeout             = "2m"  # Timeout after 2 minutes
-  }
-}
-```
-
 ## Notes
 
-- Actions do not maintain state - they execute side effects
+- Actions do not maintain state — they execute side effects
 - Each invocation is independent
-- BMC/IPMI must be configured on the target device for power operations to succeed
+- BMC/IPMI must be configured on the target device (`powerControl != 'none'`) for power operations to succeed
+- The BCM head node must be able to reach the device's BMC

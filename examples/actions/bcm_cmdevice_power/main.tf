@@ -1,12 +1,12 @@
 # Example: BCM CMDevice Power Action
 #
 # This example demonstrates how to use the bcm_cmdevice_power action
-# to execute power operations on BCM-managed devices.
+# to execute power operations on BCM-managed devices via cmdevice.powerOperation.
 #
 # Requirements:
 # - Terraform 1.14 or later
 # - BCM API endpoint and credentials
-# - Target device UUID or hostname
+# - Target device UUID (powerOperation requires UUIDs, not hostnames)
 
 terraform {
   required_providers {
@@ -35,19 +35,20 @@ action "bcm_cmdevice_power" "power_on_by_uuid" {
   }
 }
 
-# Example 2: Reboot a device by hostname
-action "bcm_cmdevice_power" "reboot_by_hostname" {
+# Example 2: Reset (graceful reboot) a device by UUID
+action "bcm_cmdevice_power" "reset_by_uuid" {
   config {
-    device_id    = var.device_hostname
-    power_action = "reboot"
+    device_id    = var.device_uuid
+    power_action = "reset"
   }
 }
 
-# Example 3: Power off with wait for completion (future feature)
+# Example 3: Power off with wait for completion
 action "bcm_cmdevice_power" "shutdown" {
   config {
     device_id           = var.device_uuid
     power_action        = "power_off"
+    force               = true
     wait_for_completion = true
     timeout             = "2m"
   }

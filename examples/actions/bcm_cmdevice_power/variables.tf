@@ -2,13 +2,7 @@
 
 variable "device_uuid" {
   type        = string
-  description = "Target device UUID for power operations"
-  default     = ""
-}
-
-variable "device_hostname" {
-  type        = string
-  description = "Target device hostname for power operations"
+  description = "Target device UUID for power operations (powerOperation requires UUIDs)"
   default     = ""
 }
 
