@@ -218,8 +218,8 @@ func (a *CMDevicePowerAction) Invoke(ctx context.Context, req action.InvokeReque
 
 	tflog.Info(ctx, "POWER ACTION: device identity from BCM", map[string]interface{}{
 		"device_id_sent": deviceID,
-		"bcm_hostname":  hostname,
-		"bcm_uuid":      nodeUUID,
+		"bcm_hostname":   hostname,
+		"bcm_uuid":       nodeUUID,
 		"bcm_child_type": childType,
 	})
 

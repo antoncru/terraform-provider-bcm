@@ -457,4 +457,3 @@ func TestAccCMDevicePowerAction_HeadNodeSafety(t *testing.T) {
 		t.Log("No head nodes found in cluster — head node safety check could not be verified")
 	}
 }
-

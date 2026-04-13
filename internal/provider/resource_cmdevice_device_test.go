@@ -437,9 +437,9 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 			},
 			// Import testing.
 			{
-				ResourceName:      "bcm_cmdevice_device.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "bcm_cmdevice_device.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: deviceImportIgnoreWithMgmtNetwork,
 			},
 			// Verify ID consistency after Import.
@@ -2033,9 +2033,9 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 			},
 			// Import and verify roles are preserved.
 			{
-				ResourceName:      "bcm_cmdevice_device.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "bcm_cmdevice_device.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: deviceImportIgnoreWithMgmtNetwork,
 			},
 		},
