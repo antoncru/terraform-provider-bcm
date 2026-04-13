@@ -83,20 +83,24 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	// Read from environment variables if not set in configuration
-	endpoint := data.Endpoint.ValueString()
-	if endpoint == "" {
-		endpoint = os.Getenv("BCM_ENDPOINT")
+	// Per HashiCorp convention, explicit provider block config takes precedence
+	// over environment variables. Env vars serve as fallback defaults so
+	// credentials stay out of version-controlled .tf files.
+	// Use IsNull() to distinguish "attribute not set" (fall back to env var)
+	// from "attribute explicitly set to empty string" (reject as invalid).
+	endpoint := os.Getenv("BCM_ENDPOINT")
+	if !data.Endpoint.IsNull() {
+		endpoint = data.Endpoint.ValueString()
 	}
 
-	username := data.Username.ValueString()
-	if username == "" {
-		username = os.Getenv("BCM_USERNAME")
+	username := os.Getenv("BCM_USERNAME")
+	if !data.Username.IsNull() {
+		username = data.Username.ValueString()
 	}
 
-	password := data.Password.ValueString()
-	if password == "" {
-		password = os.Getenv("BCM_PASSWORD")
+	password := os.Getenv("BCM_PASSWORD")
+	if !data.Password.IsNull() {
+		password = data.Password.ValueString()
 	}
 
 	// Validate required fields
