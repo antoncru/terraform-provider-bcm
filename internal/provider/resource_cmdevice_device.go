@@ -1708,8 +1708,27 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 
 	// Call BCM API to get device (efficient direct lookup)
 	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceID)
-	if err != nil || len(body) == 0 {
-		tflog.Warn(ctx, "Device not found in BCM, removing from state", map[string]interface{}{
+	if err != nil {
+		// Only remove from state if BCM confirms the device no longer exists.
+		// Transient errors (network timeout, auth failure, 500) must surface as
+		// diagnostics so Terraform retries instead of silently dropping the resource.
+		if containsAny(err.Error(), []string{"not found", "does not exist", "404", "null"}) {
+			tflog.Warn(ctx, "Device not found in BCM, removing from state", map[string]interface{}{
+				"uuid": state.UUID.ValueString(),
+			})
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Reading Device",
+			fmt.Sprintf("Could not read device '%s' (UUID: %s): %s",
+				state.Hostname.ValueString(), state.UUID.ValueString(), err.Error()),
+		)
+		return
+	}
+	if len(body) == 0 {
+		// BCM returned an empty body — treat as deleted
+		tflog.Warn(ctx, "Device returned empty response, removing from state", map[string]interface{}{
 			"uuid": state.UUID.ValueString(),
 		})
 		resp.State.RemoveResource(ctx)
