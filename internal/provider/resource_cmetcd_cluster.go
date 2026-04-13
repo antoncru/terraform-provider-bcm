@@ -34,7 +34,7 @@ var (
 
 // CMEtcdClusterResource defines the resource implementation.
 type CMEtcdClusterResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // NewCMEtcdClusterResource creates a new CMEtcdClusterResource.
@@ -128,21 +128,7 @@ func (r *CMEtcdClusterResource) Schema(ctx context.Context, req resource.SchemaR
 
 // Configure sets up the resource with the provider client.
 func (r *CMEtcdClusterResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if provider is not configured
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // Create implements resource.Resource (T015).
@@ -156,7 +142,7 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	// Nil client check
-	if r.client == nil {
+	if r.Client == nil {
 		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
@@ -165,7 +151,7 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 	entity := r.buildEntity(ctx, &data)
 
 	// Pre-flight validation
-	validationErrors, err := r.client.ValidateEtcdCluster(ctx, entity, true)
+	validationErrors, err := r.Client.ValidateEtcdCluster(ctx, entity, true)
 	if err != nil {
 		resp.Diagnostics.AddError("Validation API Failed", fmt.Sprintf("Failed to validate EtcdCluster: %s", err))
 		return
@@ -179,7 +165,7 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 		"name": data.Name.ValueString(),
 	})
 
-	body, err := r.client.AddEtcdCluster(ctx, entity)
+	body, err := r.Client.AddEtcdCluster(ctx, entity)
 	if err != nil {
 		resp.Diagnostics.AddError("Create Failed", fmt.Sprintf("Failed to create EtcdCluster: %s", err))
 		return
@@ -242,7 +228,7 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 	maxRetries := 5
 	var lastReadErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		readBody, err := r.client.GetEtcdCluster(ctx, createdUUID)
+		readBody, err := r.Client.GetEtcdCluster(ctx, createdUUID)
 		if err != nil {
 			lastReadErr = err
 			if attempt < maxRetries-1 {
@@ -252,7 +238,12 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 					"sleep_seconds": sleepDuration.Seconds(),
 					"error":         err.Error(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			resp.Diagnostics.AddError(
@@ -271,7 +262,12 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 					"attempt":       attempt + 1,
 					"sleep_seconds": sleepDuration.Seconds(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			resp.Diagnostics.AddError(
@@ -298,7 +294,12 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 				"attempt":       attempt + 1,
 				"sleep_seconds": sleepDuration.Seconds(),
 			})
-			time.Sleep(sleepDuration)
+			select {
+			case <-time.After(sleepDuration):
+			case <-ctx.Done():
+				resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+				return
+			}
 		} else {
 			// Final attempt failed - error out instead of saving incomplete state
 			resp.Diagnostics.AddError(
@@ -329,7 +330,7 @@ func (r *CMEtcdClusterResource) Read(ctx context.Context, req resource.ReadReque
 	}
 
 	// Nil client check
-	if r.client == nil {
+	if r.Client == nil {
 		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
@@ -347,7 +348,7 @@ func (r *CMEtcdClusterResource) Read(ctx context.Context, req resource.ReadReque
 		"id": identifier,
 	})
 
-	body, err := r.client.GetEtcdCluster(ctx, identifier)
+	body, err := r.Client.GetEtcdCluster(ctx, identifier)
 	if err != nil {
 		// Check if resource no longer exists
 		if containsAny(err.Error(), []string{"not found", "does not exist", "404", "null"}) {
@@ -400,7 +401,7 @@ func (r *CMEtcdClusterResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	// Nil client check
-	if r.client == nil {
+	if r.Client == nil {
 		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
@@ -424,7 +425,7 @@ func (r *CMEtcdClusterResource) Update(ctx context.Context, req resource.UpdateR
 	entity["uuid"] = data.UUID.ValueString()
 
 	// Pre-flight validation
-	validationErrors, err := r.client.ValidateEtcdCluster(ctx, entity, false)
+	validationErrors, err := r.Client.ValidateEtcdCluster(ctx, entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError("Validation API Failed", fmt.Sprintf("Failed to validate EtcdCluster: %s", err))
 		return
@@ -439,7 +440,7 @@ func (r *CMEtcdClusterResource) Update(ctx context.Context, req resource.UpdateR
 	})
 
 	// Update via BCM API
-	body, err := r.client.UpdateEtcdCluster(ctx, entity)
+	body, err := r.Client.UpdateEtcdCluster(ctx, entity)
 	if err != nil {
 		resp.Diagnostics.AddError("Update Failed", fmt.Sprintf("Failed to update EtcdCluster: %s", err))
 		return
@@ -480,7 +481,7 @@ func (r *CMEtcdClusterResource) Update(ctx context.Context, req resource.UpdateR
 	maxRetries := 5
 	var lastReadErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		readBody, err := r.client.GetEtcdCluster(ctx, data.UUID.ValueString())
+		readBody, err := r.Client.GetEtcdCluster(ctx, data.UUID.ValueString())
 		if err != nil {
 			lastReadErr = err
 			if attempt < maxRetries-1 {
@@ -490,7 +491,12 @@ func (r *CMEtcdClusterResource) Update(ctx context.Context, req resource.UpdateR
 					"sleep_seconds": sleepDuration.Seconds(),
 					"error":         err.Error(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			resp.Diagnostics.AddError(
@@ -508,7 +514,12 @@ func (r *CMEtcdClusterResource) Update(ctx context.Context, req resource.UpdateR
 					"attempt":       attempt + 1,
 					"sleep_seconds": sleepDuration.Seconds(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			resp.Diagnostics.AddError(
@@ -553,7 +564,7 @@ func (r *CMEtcdClusterResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 
 	// Nil client check
-	if r.client == nil {
+	if r.Client == nil {
 		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
@@ -569,7 +580,7 @@ func (r *CMEtcdClusterResource) Delete(ctx context.Context, req resource.DeleteR
 	})
 
 	// Delete via BCM API
-	_, err := r.client.RemoveEtcdCluster(ctx, uuid)
+	_, err := r.Client.RemoveEtcdCluster(ctx, uuid)
 	if err != nil {
 		// BCM can report missing entities as a failed task payload instead of a transport error.
 		if !containsAny(err.Error(), []string{"not found", "does not exist", "404", "No such", "no such"}) {

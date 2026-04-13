@@ -1274,7 +1274,12 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	// When using softwareImageProxy, add delay for BCM to process the proxy configuration
 	if partitionResult.UsesProxy {
 		tflog.Debug(ctx, "Waiting for category proxy to stabilize", nil)
-		time.Sleep(5 * time.Second)
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+			return
+		}
 	}
 
 	// Only wait for partition commit if NOT using softwareImageProxy
@@ -1402,7 +1407,12 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 
 	// Read back the created device to populate computed fields
 	// Wait a moment for BCM to process the device creation
-	time.Sleep(2 * time.Second)
+	select {
+	case <-time.After(2 * time.Second):
+	case <-ctx.Done():
+		resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+		return
+	}
 
 	readBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", newUUID)
 	if err != nil {
@@ -1549,7 +1559,11 @@ func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, cli
 				"total_wait_secs": totalWait.Seconds(),
 				"error":           err.Error(),
 			})
-			time.Sleep(delay)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return fmt.Errorf("partition wait cancelled: %w", ctx.Err())
+			}
 		}
 	}
 

@@ -428,7 +428,12 @@ func (r *CMUserUserResource) Create(ctx context.Context, req resource.CreateRequ
 	plan.UUID = types.StringValue(createdUUID)
 
 	// Wait for eventual consistency
-	time.Sleep(1 * time.Second)
+	select {
+	case <-time.After(1 * time.Second):
+	case <-ctx.Done():
+		resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+		return
+	}
 
 	// Read back created resource to populate computed fields
 	// Preserve password and authorized_ssh_keys from plan (BCM API returns empty string for both)
@@ -560,7 +565,12 @@ func (r *CMUserUserResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	// Wait for eventual consistency
-	time.Sleep(1 * time.Second)
+	select {
+	case <-time.After(1 * time.Second):
+	case <-ctx.Done():
+		resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+		return
+	}
 
 	// Read back updated resource to verify changes
 	// Preserve password and authorized_ssh_keys from plan (BCM API returns empty string for both)

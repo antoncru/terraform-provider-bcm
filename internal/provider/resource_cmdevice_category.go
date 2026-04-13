@@ -1286,7 +1286,12 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 					"attempt":       attempt + 1,
 					"sleep_seconds": sleepDuration.Seconds(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			// Last attempt failed - return the error
@@ -1317,7 +1322,12 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 				"base_type_is_null": plan.BaseType.IsNull(),
 				"base_type_unknown": plan.BaseType.IsUnknown(),
 			})
-			time.Sleep(sleepDuration)
+			select {
+			case <-time.After(sleepDuration):
+			case <-ctx.Done():
+				resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+				return
+			}
 		} else {
 			// Max retries reached - log warning but continue
 			tflog.Warn(ctx, "Computed fields not fully populated after retries", map[string]interface{}{
@@ -1557,7 +1567,12 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 					"attempt":       attempt + 1,
 					"sleep_seconds": sleepDuration.Seconds(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			// Last attempt failed - return the error
@@ -1588,7 +1603,12 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 				"base_type_is_null": state.BaseType.IsNull(),
 				"base_type_unknown": state.BaseType.IsUnknown(),
 			})
-			time.Sleep(sleepDuration)
+			select {
+			case <-time.After(sleepDuration):
+			case <-ctx.Done():
+				resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+				return
+			}
 		} else {
 			// Max retries reached - log warning but continue
 			tflog.Warn(ctx, "Computed fields not fully populated after retries in Read", map[string]interface{}{
@@ -1833,7 +1853,12 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 					"attempt":       attempt + 1,
 					"sleep_seconds": sleepDuration.Seconds(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			// Last attempt failed - return the error
@@ -1861,7 +1886,12 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 				"base_type_is_null": plan.BaseType.IsNull(),
 				"base_type_unknown": plan.BaseType.IsUnknown(),
 			})
-			time.Sleep(sleepDuration)
+			select {
+			case <-time.After(sleepDuration):
+			case <-ctx.Done():
+				resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+				return
+			}
 		} else {
 			tflog.Warn(ctx, "Computed fields not fully populated after retries in Update", map[string]interface{}{
 				"attempts":          maxRetries,

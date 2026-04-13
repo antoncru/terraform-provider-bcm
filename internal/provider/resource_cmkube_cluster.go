@@ -37,7 +37,7 @@ var (
 
 // CMKubeClusterResource defines the resource implementation.
 type CMKubeClusterResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // NewCMKubeClusterResource creates a new resource instance.
@@ -52,21 +52,7 @@ func (r *CMKubeClusterResource) Metadata(ctx context.Context, req resource.Metad
 
 // Configure adds the provider configured client to the resource.
 func (r *CMKubeClusterResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if provider is not configured
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // Schema defines the resource schema - aligned with BCM KubeCluster API entity (FR-001 through FR-019).
@@ -350,7 +336,7 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	// Nil client check
-	if r.client == nil {
+	if r.Client == nil {
 		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
@@ -366,7 +352,7 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	// Pre-flight validation (FR-018)
-	validationErrors, err := r.client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, true)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, true)
 	if err != nil {
 		resp.Diagnostics.AddError("Validation API Failed", fmt.Sprintf("Failed to validate KubeCluster: %s", err))
 		return
@@ -381,7 +367,7 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 		"uuid": clusterUUID,
 	})
 
-	body, err := r.client.CallJSONRPC(ctx, "cmkube", "addKubeCluster", entity, false)
+	body, err := r.Client.CallJSONRPC(ctx, "cmkube", "addKubeCluster", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError("Create Failed", fmt.Sprintf("Failed to create KubeCluster: %s", err))
 		return
@@ -447,7 +433,7 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 	maxRetries := 5
 	var lastReadErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		readBody, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", clusterUUID)
+		readBody, err := r.Client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", clusterUUID)
 		if err != nil {
 			lastReadErr = err
 			if attempt < maxRetries-1 {
@@ -457,7 +443,12 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 					"sleep_seconds": sleepDuration.Seconds(),
 					"error":         err.Error(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			resp.Diagnostics.AddError(
@@ -476,7 +467,12 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 					"attempt":       attempt + 1,
 					"sleep_seconds": sleepDuration.Seconds(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			resp.Diagnostics.AddError(
@@ -507,7 +503,12 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 				"attempt":       attempt + 1,
 				"sleep_seconds": sleepDuration.Seconds(),
 			})
-			time.Sleep(sleepDuration)
+			select {
+			case <-time.After(sleepDuration):
+			case <-ctx.Done():
+				resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+				return
+			}
 		} else {
 			// Final attempt failed - error out instead of saving incomplete state
 			resp.Diagnostics.AddError(
@@ -562,7 +563,7 @@ func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadReque
 	}
 
 	// Nil client check
-	if r.client == nil {
+	if r.Client == nil {
 		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
@@ -583,7 +584,7 @@ func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadReque
 		"id": identifier,
 	})
 
-	body, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", identifier)
+	body, err := r.Client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", identifier)
 	if err != nil {
 		// Check if resource no longer exists
 		if containsAny(err.Error(), []string{"not found", "does not exist", "404", "null"}) {
@@ -649,7 +650,7 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	// Nil client check
-	if r.client == nil {
+	if r.Client == nil {
 		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
@@ -679,7 +680,7 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	// Pre-flight validation (FR-018)
-	validationErrors, err := r.client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, false)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError("Validation API Failed", fmt.Sprintf("Failed to validate KubeCluster: %s", err))
 		return
@@ -694,7 +695,7 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 	})
 
 	// Update via BCM API
-	body, err := r.client.CallJSONRPC(ctx, "cmkube", "updateKubeCluster", entity, false)
+	body, err := r.Client.CallJSONRPC(ctx, "cmkube", "updateKubeCluster", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError("Update Failed", fmt.Sprintf("Failed to update KubeCluster: %s", err))
 		return
@@ -735,7 +736,7 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 	maxRetries := 5
 	var lastReadErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		readBody, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", data.UUID.ValueString())
+		readBody, err := r.Client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", data.UUID.ValueString())
 		if err != nil {
 			lastReadErr = err
 			if attempt < maxRetries-1 {
@@ -745,7 +746,12 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 					"sleep_seconds": sleepDuration.Seconds(),
 					"error":         err.Error(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			resp.Diagnostics.AddError(
@@ -763,7 +769,12 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 					"attempt":       attempt + 1,
 					"sleep_seconds": sleepDuration.Seconds(),
 				})
-				time.Sleep(sleepDuration)
+				select {
+				case <-time.After(sleepDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 				continue
 			}
 			resp.Diagnostics.AddError(
@@ -822,7 +833,7 @@ func (r *CMKubeClusterResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 
 	// Nil client check
-	if r.client == nil {
+	if r.Client == nil {
 		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
@@ -838,7 +849,7 @@ func (r *CMKubeClusterResource) Delete(ctx context.Context, req resource.DeleteR
 	})
 
 	// Delete via BCM API
-	_, err := r.client.CallJSONRPC(ctx, "cmkube", "removeKubeCluster", uuid, false)
+	_, err := r.Client.CallJSONRPC(ctx, "cmkube", "removeKubeCluster", uuid, false)
 	if err != nil {
 		// Ignore "not found" errors during delete (idempotent)
 		if !containsAny(err.Error(), []string{"not found", "does not exist", "404"}) {

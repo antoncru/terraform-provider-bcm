@@ -353,7 +353,12 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 					"attempt":      attempt + 1,
 					"wait_seconds": waitDuration.Seconds(),
 				})
-				time.Sleep(waitDuration)
+				select {
+				case <-time.After(waitDuration):
+				case <-ctx.Done():
+					resp.Diagnostics.AddError("Operation Cancelled", ctx.Err().Error())
+					return
+				}
 			}
 
 			// Check if clone is complete by reading fileOperationInProgress

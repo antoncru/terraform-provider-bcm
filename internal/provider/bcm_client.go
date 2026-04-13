@@ -179,6 +179,11 @@ func NewBCMClient(ctx context.Context, endpoint, username, password string, inse
 				"backoff_ms":  backoff.Milliseconds(),
 			})
 
+			// Context-aware sleep: select waits on two channels simultaneously.
+			// time.After fires when the backoff expires (normal retry path).
+			// ctx.Done fires immediately if the caller cancels (Ctrl+C, timeout).
+			// Whichever fires first wins — this avoids blocking on cancellation,
+			// unlike time.Sleep which is uninterruptible.
 			select {
 			case <-time.After(backoff):
 			case <-ctx.Done():
