@@ -1313,7 +1313,14 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	// Build device entity for BCM API (with generated UUID and resolved partition)
 	// Partition field is always included as BCM requires it
 	// nil for existingInterfaces since this is a new device
-	deviceEntity := r.buildDeviceAPIEntityWithExisting(plan, newUUID, partitionUUID, nil)
+	deviceEntity, err := r.buildDeviceAPIEntityWithExisting(plan, newUUID, partitionUUID, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Building Device Entity",
+			fmt.Sprintf("Could not build device entity for '%s': %s", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
 
 	// Lookup and add roles to the entity (requires BCM API access to get full role objects)
 	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
@@ -1932,7 +1939,14 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	// Build device entity for BCM API (include UUID for update)
 	// Partition field is always included as BCM requires it
 	// Pass existing interfaces from state to preserve UUIDs
-	deviceEntity := r.buildDeviceAPIEntityWithExisting(plan, state.UUID.ValueString(), partitionUUID, state.Interfaces)
+	deviceEntity, err := r.buildDeviceAPIEntityWithExisting(plan, state.UUID.ValueString(), partitionUUID, state.Interfaces)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Building Device Entity",
+			fmt.Sprintf("Could not build device entity for '%s': %s", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
 
 	// Lookup and add roles to the entity (requires BCM API access to get full role objects)
 	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
@@ -2210,31 +2224,61 @@ func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.I
 	})
 }
 
-// buildDeviceAPIEntityWithExisting constructs BCM API entity, preserving interface UUIDs from existing state.
-func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceDeviceResourceModel, deviceUUID string, partitionUUID string, existingInterfaces []DeviceInterfaceModel) map[string]interface{} {
-	// Build interfaces from the interfaces block
-	interfaces := buildInterfacesAPIArray(plan.Interfaces, existingInterfaces)
-
-	// Derive provisioningInterface from built interfaces (which have correct UUIDs).
-	// Find the first bootable interface; fall back to interfaces[0] if none is bootable.
-	provisioningInterfaceUUID := ""
+// deriveProvisioningInterface selects the best interface UUID for PXE provisioning.
+// Priority: (1) named "BOOTIF" (PXE convention), (2) explicitly bootable,
+// (3) first non-BMC interface, (4) first interface (all-BMC edge case).
+// BMC interfaces (IPMI/iLO/iDRAC) are out-of-band management and cannot do PXE provisioning.
+func deriveProvisioningInterface(interfaces []interface{}) string {
+	// Priority 1: named "BOOTIF" (PXE boot interface convention — most reliable signal)
 	for _, iface := range interfaces {
 		if ifaceMap, ok := iface.(map[string]interface{}); ok {
-			if bootable, ok := ifaceMap["bootable"].(bool); ok && bootable {
-				if ifaceUUID, ok := ifaceMap["uuid"].(string); ok {
-					provisioningInterfaceUUID = ifaceUUID
-					break
+			if name, _ := ifaceMap["name"].(string); strings.EqualFold(name, "BOOTIF") {
+				if uuid, ok := ifaceMap["uuid"].(string); ok {
+					return uuid
 				}
 			}
 		}
 	}
-	if provisioningInterfaceUUID == "" && len(interfaces) > 0 {
-		if firstIface, ok := interfaces[0].(map[string]interface{}); ok {
-			if ifaceUUID, ok := firstIface["uuid"].(string); ok {
-				provisioningInterfaceUUID = ifaceUUID
+	// Priority 2: explicitly bootable
+	for _, iface := range interfaces {
+		if ifaceMap, ok := iface.(map[string]interface{}); ok {
+			if bootable, _ := ifaceMap["bootable"].(bool); bootable {
+				if uuid, ok := ifaceMap["uuid"].(string); ok {
+					return uuid
+				}
 			}
 		}
 	}
+	// Priority 3: first non-BMC interface
+	for _, iface := range interfaces {
+		if ifaceMap, ok := iface.(map[string]interface{}); ok {
+			if childType, _ := ifaceMap["childType"].(string); strings.EqualFold(childType, "NetworkBmcInterface") {
+				continue
+			}
+			if uuid, ok := ifaceMap["uuid"].(string); ok {
+				return uuid
+			}
+		}
+	}
+	// Priority 4: first interface (all-BMC edge case)
+	if len(interfaces) > 0 {
+		if firstIface, ok := interfaces[0].(map[string]interface{}); ok {
+			if uuid, ok := firstIface["uuid"].(string); ok {
+				return uuid
+			}
+		}
+	}
+	return ""
+}
+
+// buildDeviceAPIEntityWithExisting constructs BCM API entity, preserving interface UUIDs from existing state.
+// Returns an error if no provisioning interface can be determined.
+func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceDeviceResourceModel, deviceUUID string, partitionUUID string, existingInterfaces []DeviceInterfaceModel) (map[string]interface{}, error) {
+	// Build interfaces from the interfaces block
+	interfaces := buildInterfacesAPIArray(plan.Interfaces, existingInterfaces)
+
+	// Derive provisioningInterface from built interfaces (which have correct UUIDs).
+	provisioningInterfaceUUID := deriveProvisioningInterface(interfaces)
 
 	// Device MAC: explicit top-level mac if set, otherwise first interface MAC
 	deviceMAC := ""
@@ -2246,8 +2290,16 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	}
 
 	provisioningIfaceFinal := provisioningInterfaceUUID
-	if !plan.ProvisioningInterface.IsNull() && !plan.ProvisioningInterface.IsUnknown() && plan.ProvisioningInterface.ValueString() != "" {
+	// Only honor user's explicit provisioning_interface on update (existingInterfaces != nil),
+	// where interface UUIDs are preserved from state. On create, interfaces get fresh UUIDs
+	// via uuid.New(), so the user's value (from a generated/imported config) would be stale.
+	if existingInterfaces != nil && !plan.ProvisioningInterface.IsNull() && !plan.ProvisioningInterface.IsUnknown() && plan.ProvisioningInterface.ValueString() != "" {
 		provisioningIfaceFinal = plan.ProvisioningInterface.ValueString()
+	}
+
+	if provisioningIfaceFinal == "" {
+		return nil, fmt.Errorf("could not determine provisioning interface: device must have at least one " +
+			"non-BMC interface (e.g., BOOTIF), or provisioning_interface must be set explicitly")
 	}
 
 	entity := map[string]interface{}{
@@ -2391,7 +2443,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	// Build Kubernetes roles from kubelet_role and etcd_host_role blocks
 	// These are added to the entity's roles array by buildKubernetesRolesForEntity
 
-	return entity
+	return entity, nil
 }
 
 // buildKubernetesRolesForEntity builds KubeletRole and EtcdHostRole entities

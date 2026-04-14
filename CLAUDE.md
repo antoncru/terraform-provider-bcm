@@ -191,3 +191,22 @@ See **AGENTS.md** for complete TDD patterns including:
 - **TDD Patterns:** `./AGENTS.md`
 - **BCM API Docs:** `sampleRest/CMDevice_Complete_Documentation.md`
 - **Skills:** `terraform-provider-tests`, `terraform-provider-design`
+
+## Appendix
+
+### Provisioning Interface Derivation
+
+`deriveProvisioningInterface()` in `resource_cmdevice_device.go` selects the correct interface UUID for PXE provisioning when the user doesn't set `provisioning_interface` explicitly.
+
+**Priority chain:**
+
+| Priority | Condition | Rationale |
+|----------|-----------|-----------|
+| 1 | `name == "BOOTIF"` (case-insensitive) | PXE boot interface convention — most reliable signal |
+| 2 | `bootable == true` | Explicit flag, but BCM rarely sets it (usually `null`) |
+| 3 | First non-BMC interface | BMC (IPMI/iLO/iDRAC) is out-of-band management, cannot PXE |
+| 4 | First interface | All-BMC edge case fallback |
+
+**Error handling:** If no interface can be derived and the user didn't set `provisioning_interface`, the provider returns an error before any API call rather than sending an empty string to BCM.
+
+**Background:** BCM's `validateDevice` rejects `provisioningInterface` values that don't reference an interface in the same entity. Prior to this fix, the fallback blindly picked `interfaces[0]`, which could be a BMC interface — causing validation errors or incorrect provisioning configuration.

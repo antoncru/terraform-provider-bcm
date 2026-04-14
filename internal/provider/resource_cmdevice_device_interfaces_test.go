@@ -1120,7 +1120,8 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray(t *testing.T) 
 	}
 
 	r := &CMDeviceDeviceResource{}
-	entity := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.NoError(t, err)
 
 	// The provisioningInterface must be the BOOTABLE interface's UUID (eth1),
 	// NOT the first interface's UUID (eth0).
@@ -1191,7 +1192,8 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFallbackToFirst(t *testing.T)
 	}
 
 	r := &CMDeviceDeviceResource{}
-	entity := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.NoError(t, err)
 
 	// With no bootable interface, provisioningInterface should fall back to
 	// the FIRST interface's UUID from the built array (eth0).
@@ -1199,4 +1201,290 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFallbackToFirst(t *testing.T)
 	require.True(t, ok, "provisioningInterface should be a string")
 	assert.Equal(t, eth0ExistingUUID, provisioningUUID,
 		"provisioningInterface should fall back to first interface (eth0) UUID when no interface is bootable")
+}
+
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceSkipsBMC verifies that when no
+// interface is marked bootable and the first interface is BMC (IPMI/iLO/iDRAC),
+// provisioningInterface skips the BMC and selects the first non-BMC interface.
+// BMC interfaces are out-of-band management and cannot do PXE provisioning.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceSkipsBMC(t *testing.T) {
+	ipmiExistingUUID := "aaaa1111-2222-3333-4444-555555555555"
+	bootifExistingUUID := "bbbb6666-7777-8888-9999-000000000000"
+
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("ipmi0"),
+			Type:     types.StringValue("bmc"),
+			Network:  types.StringValue("net-uuid-bmc"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+		{
+			Name:     types.StringValue("BOOTIF"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-mgmt"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+	}
+
+	existingInterfaces := []DeviceInterfaceModel{
+		{
+			Name: types.StringValue("ipmi0"),
+			UUID: types.StringValue(ipmiExistingUUID),
+		},
+		{
+			Name: types.StringValue("BOOTIF"),
+			UUID: types.StringValue(bootifExistingUUID),
+		},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:   types.StringValue("test-node-bmc"),
+		Category:   types.StringValue("cat-uuid"),
+		Interfaces: planInterfaces,
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.NoError(t, err)
+
+	provisioningUUID, ok := entity["provisioningInterface"].(string)
+	require.True(t, ok, "provisioningInterface should be a string")
+	assert.Equal(t, bootifExistingUUID, provisioningUUID,
+		"provisioningInterface should skip BMC (ipmi0) and select BOOTIF")
+}
+
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceBOOTIFByName verifies that an
+// interface named "BOOTIF" is selected over other non-BMC interfaces when no
+// interface is marked bootable. BOOTIF is the PXE boot interface convention.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceBOOTIFByName(t *testing.T) {
+	ipmiUUID := "aaaa1111-2222-3333-4444-555555555555"
+	eth0UUID := "bbbb2222-3333-4444-5555-666666666666"
+	bootifUUID := "cccc3333-4444-5555-6666-777777777777"
+
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("ipmi0"),
+			Type:     types.StringValue("bmc"),
+			Network:  types.StringValue("net-uuid-bmc"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+		{
+			Name:     types.StringValue("eth0"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-data"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+		{
+			Name:     types.StringValue("BOOTIF"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-mgmt"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+	}
+
+	existingInterfaces := []DeviceInterfaceModel{
+		{Name: types.StringValue("ipmi0"), UUID: types.StringValue(ipmiUUID)},
+		{Name: types.StringValue("eth0"), UUID: types.StringValue(eth0UUID)},
+		{Name: types.StringValue("BOOTIF"), UUID: types.StringValue(bootifUUID)},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:   types.StringValue("test-node-bootif"),
+		Category:   types.StringValue("cat-uuid"),
+		Interfaces: planInterfaces,
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.NoError(t, err)
+
+	provisioningUUID, ok := entity["provisioningInterface"].(string)
+	require.True(t, ok, "provisioningInterface should be a string")
+	assert.Equal(t, bootifUUID, provisioningUUID,
+		"provisioningInterface should select BOOTIF by name over eth0, even though eth0 is listed first")
+}
+
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceNonBMCFallback verifies that
+// when no interface is bootable and none is named BOOTIF, the first non-BMC
+// interface is selected.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceNonBMCFallback(t *testing.T) {
+	ipmiUUID := "aaaa1111-2222-3333-4444-555555555555"
+	eth0UUID := "bbbb2222-3333-4444-5555-666666666666"
+	eth1UUID := "cccc3333-4444-5555-6666-777777777777"
+
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("ipmi0"),
+			Type:     types.StringValue("bmc"),
+			Network:  types.StringValue("net-uuid-bmc"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+		{
+			Name:     types.StringValue("eth0"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-1"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+		{
+			Name:     types.StringValue("eth1"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-2"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+	}
+
+	existingInterfaces := []DeviceInterfaceModel{
+		{Name: types.StringValue("ipmi0"), UUID: types.StringValue(ipmiUUID)},
+		{Name: types.StringValue("eth0"), UUID: types.StringValue(eth0UUID)},
+		{Name: types.StringValue("eth1"), UUID: types.StringValue(eth1UUID)},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:   types.StringValue("test-node-no-bootif"),
+		Category:   types.StringValue("cat-uuid"),
+		Interfaces: planInterfaces,
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.NoError(t, err)
+
+	provisioningUUID, ok := entity["provisioningInterface"].(string)
+	require.True(t, ok, "provisioningInterface should be a string")
+	assert.Equal(t, eth0UUID, provisioningUUID,
+		"provisioningInterface should fall back to first non-BMC interface (eth0) when no BOOTIF exists")
+}
+
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceOnlyBMC verifies that when ALL
+// interfaces are BMC (edge case), provisioningInterface falls back to the first
+// interface rather than leaving it empty.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceOnlyBMC(t *testing.T) {
+	ipmiExistingUUID := "cccc1111-2222-3333-4444-555555555555"
+
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("ipmi0"),
+			Type:     types.StringValue("bmc"),
+			Network:  types.StringValue("net-uuid-bmc"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+	}
+
+	existingInterfaces := []DeviceInterfaceModel{
+		{
+			Name: types.StringValue("ipmi0"),
+			UUID: types.StringValue(ipmiExistingUUID),
+		},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:   types.StringValue("test-node-bmc-only"),
+		Category:   types.StringValue("cat-uuid"),
+		Interfaces: planInterfaces,
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.NoError(t, err)
+
+	provisioningUUID, ok := entity["provisioningInterface"].(string)
+	require.True(t, ok, "provisioningInterface should be a string")
+	assert.Equal(t, ipmiExistingUUID, provisioningUUID,
+		"provisioningInterface should fall back to first interface when all are BMC")
+}
+
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceNoInterfaces verifies that
+// building a device entity with zero interfaces returns an error rather than
+// sending an empty provisioningInterface to BCM.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceNoInterfaces(t *testing.T) {
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:   types.StringValue("test-node-no-ifaces"),
+		Category:   types.StringValue("cat-uuid"),
+		Interfaces: nil,
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", nil)
+	require.Error(t, err, "should return error when no interfaces and no explicit provisioning_interface")
+	assert.Nil(t, entity)
+	assert.Contains(t, err.Error(), "could not determine provisioning interface")
+}
+
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceCreateIgnoresStaleUUID verifies
+// that on the create path (existingInterfaces == nil), the user's explicit
+// provisioning_interface is ignored because interface UUIDs are freshly generated.
+// The derived BOOTIF UUID must be used instead of the stale config value.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceCreateIgnoresStaleUUID(t *testing.T) {
+	staleUUID := "deadbeef-dead-beef-dead-beefdeadbeef"
+
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("ipmi0"),
+			Type:     types.StringValue("bmc"),
+			Network:  types.StringValue("net-uuid-bmc"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+		{
+			Name:     types.StringValue("BOOTIF"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-mgmt"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(true),
+			UUID:     types.StringValue(""),
+		},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:              types.StringValue("test-node-create"),
+		Category:              types.StringValue("cat-uuid"),
+		Interfaces:            planInterfaces,
+		ProvisioningInterface: types.StringValue(staleUUID),
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", nil)
+	require.NoError(t, err)
+
+	provisioningUUID, ok := entity["provisioningInterface"].(string)
+	require.True(t, ok, "provisioningInterface should be a string")
+
+	assert.NotEqual(t, staleUUID, provisioningUUID,
+		"create path must NOT use the stale provisioning_interface from config")
+
+	builtInterfaces, ok := entity["interfaces"].([]interface{})
+	require.True(t, ok)
+	var bootifUUID string
+	for _, iface := range builtInterfaces {
+		ifaceMap, ok := iface.(map[string]interface{})
+		require.True(t, ok, "interface element should be a map")
+		if ifaceMap["name"] == "BOOTIF" {
+			uuid, ok := ifaceMap["uuid"].(string)
+			require.True(t, ok, "BOOTIF uuid should be a string")
+			bootifUUID = uuid
+			break
+		}
+	}
+	require.NotEmpty(t, bootifUUID, "BOOTIF interface should be in built array")
+	assert.Equal(t, bootifUUID, provisioningUUID,
+		"create path should use the freshly generated BOOTIF UUID, not the stale config value")
 }
