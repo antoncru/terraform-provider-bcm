@@ -1372,11 +1372,9 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceNonBMCFallback(t *testing.T) 
 }
 
 // TestBuildDeviceAPIEntity_ProvisioningInterfaceOnlyBMC verifies that when ALL
-// interfaces are BMC (edge case), provisioningInterface falls back to the first
-// interface rather than leaving it empty.
+// interfaces are BMC, building the entity returns an error rather than silently
+// picking a BMC interface that cannot PXE boot.
 func TestBuildDeviceAPIEntity_ProvisioningInterfaceOnlyBMC(t *testing.T) {
-	ipmiExistingUUID := "cccc1111-2222-3333-4444-555555555555"
-
 	planInterfaces := []DeviceInterfaceModel{
 		{
 			Name:     types.StringValue("ipmi0"),
@@ -1391,7 +1389,7 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceOnlyBMC(t *testing.T) {
 	existingInterfaces := []DeviceInterfaceModel{
 		{
 			Name: types.StringValue("ipmi0"),
-			UUID: types.StringValue(ipmiExistingUUID),
+			UUID: types.StringValue("cccc1111-2222-3333-4444-555555555555"),
 		},
 	}
 
@@ -1402,13 +1400,9 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceOnlyBMC(t *testing.T) {
 	}
 
 	r := &CMDeviceDeviceResource{}
-	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
-	require.NoError(t, err)
-
-	provisioningUUID, ok := entity["provisioningInterface"].(string)
-	require.True(t, ok, "provisioningInterface should be a string")
-	assert.Equal(t, ipmiExistingUUID, provisioningUUID,
-		"provisioningInterface should fall back to first interface when all are BMC")
+	_, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "could not determine provisioning interface")
 }
 
 // TestBuildDeviceAPIEntity_ProvisioningInterfaceNoInterfaces verifies that
