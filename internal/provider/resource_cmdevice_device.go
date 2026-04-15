@@ -2260,14 +2260,6 @@ func deriveProvisioningInterface(interfaces []interface{}) string {
 			}
 		}
 	}
-	// Priority 4: first interface (all-BMC edge case)
-	if len(interfaces) > 0 {
-		if firstIface, ok := interfaces[0].(map[string]interface{}); ok {
-			if uuid, ok := firstIface["uuid"].(string); ok {
-				return uuid
-			}
-		}
-	}
 	return ""
 }
 
