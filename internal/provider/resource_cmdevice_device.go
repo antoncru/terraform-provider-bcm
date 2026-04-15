@@ -2228,6 +2228,11 @@ func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.I
 // Priority: (1) named "BOOTIF" (PXE convention), (2) explicitly bootable,
 // (3) first non-BMC interface, (4) first interface (all-BMC edge case).
 // BMC interfaces (IPMI/iLO/iDRAC) are out-of-band management and cannot do PXE provisioning.
+//
+// TODO: Add bond interface support (e.g., "bond0") as a provisioning interface candidate.
+// Bond interfaces (childType "NetworkBondInterface") are valid PXE targets when the cluster
+// uses NIC bonding for redundancy. They should be prioritized after BOOTIF by name but
+// before the generic "first non-BMC" fallback — e.g., priority 2.5: first bond interface.
 func deriveProvisioningInterface(interfaces []interface{}) string {
 	// Priority 1: named "BOOTIF" (PXE boot interface convention — most reliable signal)
 	for _, iface := range interfaces {
@@ -2269,7 +2274,10 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	// Build interfaces from the interfaces block
 	interfaces := buildInterfacesAPIArray(plan.Interfaces, existingInterfaces)
 
-	// Derive provisioningInterface from built interfaces (which have correct UUIDs).
+	// TODO: On the Update path (existingInterfaces != nil), derivation is dead code because
+	// UseStateForUnknown always populates plan.ProvisioningInterface from prior state, so the
+	// override below always wins. Consider splitting create vs update so that only the Create
+	// path calls deriveProvisioningInterface, and Update reads directly from the plan/state.
 	provisioningInterfaceUUID := deriveProvisioningInterface(interfaces)
 
 	// Device MAC: explicit top-level mac if set, otherwise first interface MAC
@@ -2282,9 +2290,9 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	}
 
 	provisioningIfaceFinal := provisioningInterfaceUUID
-	// Only honor user's explicit provisioning_interface on update (existingInterfaces != nil),
-	// where interface UUIDs are preserved from state. On create, interfaces get fresh UUIDs
-	// via uuid.New(), so the user's value (from a generated/imported config) would be stale.
+	// On update (existingInterfaces != nil), honor the plan value which comes from either
+	// the user's explicit config or UseStateForUnknown (prior state). On create, interfaces
+	// get fresh UUIDs via uuid.New(), so the user's value would be stale — skip the override.
 	if existingInterfaces != nil && !plan.ProvisioningInterface.IsNull() && !plan.ProvisioningInterface.IsUnknown() && plan.ProvisioningInterface.ValueString() != "" {
 		provisioningIfaceFinal = plan.ProvisioningInterface.ValueString()
 	}
@@ -2340,7 +2348,14 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	SetStringField(entity, "fips", plan.Fips)
 	SetStringField(entity, "fromTemplateNode", plan.FromTemplateNode)
 	SetInt64Field(entity, "indexInsideContainer", plan.IndexInsideContainer)
-	SetStringField(entity, "parent_uuid", plan.ParentUUID)
+	// parent_uuid is a self-reference to the device's own UUID in BCM.
+	// On create (existingInterfaces == nil), default to deviceUUID since it won't be in the plan.
+	// On update, honor the plan/state value.
+	if !plan.ParentUUID.IsNull() && !plan.ParentUUID.IsUnknown() {
+		entity["parent_uuid"] = plan.ParentUUID.ValueString()
+	} else if existingInterfaces == nil {
+		entity["parent_uuid"] = deviceUUID
+	}
 	SetStringField(entity, "provisioningTransport", plan.ProvisioningTransport)
 
 	// Provisioning & boot
@@ -2425,7 +2440,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	SetJSONField(entity, "switchPorts", plan.SwitchPorts)
 	SetJSONField(entity, "userDefinedResources", plan.UserDefinedResources)
 
-	if svc := buildDeviceServicesAPI(plan.Services); len(svc) > 0 {
+	if svc := buildDeviceServicesAPI(plan.Services, deviceUUID); len(svc) > 0 {
 		entity["services"] = svc
 	}
 
@@ -2975,7 +2990,9 @@ func filterServicesToMatchConfig(bcmServices, configuredServices []DeviceOSServi
 }
 
 // buildDeviceServicesAPI builds BCM JSON for device.services from Terraform models.
-func buildDeviceServicesAPI(models []DeviceOSServiceConfigModel) []interface{} {
+// deviceUUID is used to set ref_role_uuid (BCM's back-reference to the owning device)
+// when the user hasn't explicitly provided one.
+func buildDeviceServicesAPI(models []DeviceOSServiceConfigModel, deviceUUID string) []interface{} {
 	if len(models) == 0 {
 		return nil
 	}
@@ -3023,7 +3040,7 @@ func buildDeviceServicesAPI(models []DeviceOSServiceConfigModel) []interface{} {
 		if !s.RefRoleUUID.IsNull() && !s.RefRoleUUID.IsUnknown() {
 			sm["ref_role_uuid"] = s.RefRoleUUID.ValueString()
 		} else {
-			sm["ref_role_uuid"] = "00000000-0000-0000-0000-000000000000"
+			sm["ref_role_uuid"] = deviceUUID
 		}
 
 		// Strings: send explicit default for array elements

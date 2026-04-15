@@ -1482,3 +1482,123 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceCreateIgnoresStaleUUID(t *tes
 	assert.Equal(t, bootifUUID, provisioningUUID,
 		"create path should use the freshly generated BOOTIF UUID, not the stale config value")
 }
+
+func TestBuildDeviceAPIEntity_CreateSetsParentUUIDAndRefRoleUUID(t *testing.T) {
+	deviceUUID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("BOOTIF"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-mgmt"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue(""),
+		},
+	}
+
+	planServices := []DeviceOSServiceConfigModel{
+		{
+			Name:      types.StringValue("nslcd"),
+			Autostart: types.BoolValue(true),
+			Monitored: types.BoolValue(true),
+			RunIf:     types.StringValue("ALWAYS"),
+			// ref_role_uuid intentionally left null to test auto-derivation
+			RefRoleUUID: types.StringNull(),
+		},
+		{
+			Name:        types.StringValue("sshd"),
+			Autostart:   types.BoolValue(true),
+			Monitored:   types.BoolValue(true),
+			RunIf:       types.StringValue("ALWAYS"),
+			RefRoleUUID: types.StringNull(),
+		},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:   types.StringValue("test-node-parent-uuid"),
+		Category:   types.StringValue("cat-uuid"),
+		Interfaces: planInterfaces,
+		Services:   planServices,
+		// ParentUUID intentionally left null to test auto-derivation on create
+		ParentUUID: types.StringNull(),
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, deviceUUID, "partition-uuid", nil)
+	require.NoError(t, err)
+
+	// parent_uuid should be set to the device UUID on create
+	parentUUID, ok := entity["parent_uuid"].(string)
+	require.True(t, ok, "parent_uuid should be present and be a string")
+	assert.Equal(t, deviceUUID, parentUUID,
+		"create path must set parent_uuid to the device's own UUID")
+
+	// ref_role_uuid on each service should be set to the device UUID
+	services, ok := entity["services"].([]interface{})
+	require.True(t, ok, "services should be an array")
+	require.Len(t, services, 2)
+
+	for _, svc := range services {
+		svcMap, ok := svc.(map[string]interface{})
+		require.True(t, ok, "service element should be a map")
+		refRole, ok := svcMap["ref_role_uuid"].(string)
+		require.True(t, ok, "ref_role_uuid should be a string in service %v", svcMap["name"])
+		assert.Equal(t, deviceUUID, refRole,
+			"ref_role_uuid for service '%s' must equal the device UUID on create", svcMap["name"])
+	}
+}
+
+func TestBuildDeviceAPIEntity_UpdatePreservesExplicitRefRoleUUID(t *testing.T) {
+	deviceUUID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	customRoleUUID := "11111111-2222-3333-4444-555555555555"
+
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("BOOTIF"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-mgmt"),
+			Bootable: types.BoolNull(),
+			DHCP:     types.BoolValue(false),
+			UUID:     types.StringValue("existing-iface-uuid"),
+		},
+	}
+
+	planServices := []DeviceOSServiceConfigModel{
+		{
+			Name:        types.StringValue("nslcd"),
+			Autostart:   types.BoolValue(true),
+			RefRoleUUID: types.StringValue(customRoleUUID),
+		},
+	}
+
+	existingInterfaces := []DeviceInterfaceModel{
+		{
+			Name: types.StringValue("BOOTIF"),
+			UUID: types.StringValue("existing-iface-uuid"),
+		},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:              types.StringValue("test-node-update"),
+		Category:              types.StringValue("cat-uuid"),
+		Interfaces:            planInterfaces,
+		Services:              planServices,
+		ProvisioningInterface: types.StringValue("existing-iface-uuid"),
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity, err := r.buildDeviceAPIEntityWithExisting(plan, deviceUUID, "partition-uuid", existingInterfaces)
+	require.NoError(t, err)
+
+	services, ok := entity["services"].([]interface{})
+	require.True(t, ok, "services should be an array")
+	require.Len(t, services, 1)
+
+	svcMap, ok := services[0].(map[string]interface{})
+	require.True(t, ok, "service element should be a map")
+	refRole, ok := svcMap["ref_role_uuid"].(string)
+	require.True(t, ok, "ref_role_uuid should be a string")
+	assert.Equal(t, customRoleUUID, refRole,
+		"when user explicitly sets ref_role_uuid, it should be preserved as-is")
+}

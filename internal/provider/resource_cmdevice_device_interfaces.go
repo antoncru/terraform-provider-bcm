@@ -180,7 +180,7 @@ func buildInterfaceAPIEntity(iface DeviceInterfaceModel, existingUUID string) ma
 	if !iface.DHCP.IsNull() && !iface.DHCP.IsUnknown() {
 		entity["dhcp"] = iface.DHCP.ValueBool()
 	} else {
-		entity["dhcp"] = true // Default
+		entity["dhcp"] = false
 	}
 
 	if !iface.Bootable.IsNull() && !iface.Bootable.IsUnknown() {
