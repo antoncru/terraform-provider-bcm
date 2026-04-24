@@ -2254,7 +2254,17 @@ func deriveProvisioningInterface(interfaces []interface{}) string {
 			}
 		}
 	}
-	// Priority 3: first non-BMC interface
+	// Priority 3: bond interface (aggregated link preferred over single physical for provisioning)
+	for _, iface := range interfaces {
+		if ifaceMap, ok := iface.(map[string]interface{}); ok {
+			if childType, _ := ifaceMap["childType"].(string); strings.EqualFold(childType, "NetworkBondInterface") {
+				if uuid, ok := ifaceMap["uuid"].(string); ok {
+					return uuid
+				}
+			}
+		}
+	}
+	// Priority 4: first non-BMC interface
 	for _, iface := range interfaces {
 		if ifaceMap, ok := iface.(map[string]interface{}); ok {
 			if childType, _ := ifaceMap["childType"].(string); strings.EqualFold(childType, "NetworkBmcInterface") {
