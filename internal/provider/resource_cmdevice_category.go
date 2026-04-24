@@ -125,6 +125,10 @@ type CMDeviceCategoryResourceModel struct {
 	DataNode          types.Bool   `tfsdk:"data_node"`           // Optional
 	InteractiveUser   types.String `tfsdk:"interactive_user"`    // Optional
 	UseExclusivelyFor types.String `tfsdk:"use_exclusively_for"` // Optional
+	CpuspeedGovernor  types.String `tfsdk:"cpuspeed_governor"`   // Optional+Computed
+
+	// BCM internal metadata
+	ExtraValues types.String `tfsdk:"extra_values"` // Computed, JSON string
 
 	// Force parameter
 	Force types.Bool `tfsdk:"force"` // Optional, default: false
@@ -1085,6 +1089,21 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			"use_exclusively_for": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "Use exclusively for",
+			},
+			"cpuspeed_governor": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "CPU frequency scaling governor (e.g., performance, powersave, ondemand). Empty string means system default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"extra_values": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "BCM internal extra values (JSON). Read-only.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"force": schema.BoolAttribute{
 				Optional:            true,
@@ -2227,6 +2246,7 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 	SetBoolField(entity, "dataNode", model.DataNode)
 	SetStringField(entity, "interactiveUser", model.InteractiveUser)
 	SetStringField(entity, "useExclusivelyFor", model.UseExclusivelyFor)
+	SetStringField(entity, "cpuspeedGovernor", model.CpuspeedGovernor)
 
 	// Installation additional settings (T023-T025)
 	SetBoolField(entity, "nodeInstallerDisk", model.NodeInstallerDisk)
@@ -2543,17 +2563,17 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 			mountsList := make([]map[string]interface{}, 0, len(mounts))
 			for _, mount := range mounts {
 				mountMap := map[string]interface{}{
-					"baseType": "FSMount",
-					"device":   mount.Device.ValueString(),
-					"path":     mount.Mountpoint.ValueString(), // mountpoint -> path
-					"type":     mount.Filesystem.ValueString(), // filesystem -> type
+					"baseType":   "FSMount",
+					"device":     mount.Device.ValueString(),
+					"mountpoint": mount.Mountpoint.ValueString(),
+					"filesystem": mount.Filesystem.ValueString(),
 				}
 				// Include UUID if present (for updates), BCM assigns on create
 				if !mount.UUID.IsNull() && mount.UUID.ValueString() != "" {
 					mountMap["uuid"] = mount.UUID.ValueString()
 				}
 				// Handle optional fields
-				SetStringField(mountMap, "options", mount.MountOptions) // mountoptions -> options
+				SetStringField(mountMap, "mountoptions", mount.MountOptions)
 				SetStringField(mountMap, "fsck", mount.Fsck)
 				SetBoolField(mountMap, "dump", mount.Dump)
 				SetBoolField(mountMap, "rdma", mount.RDMA)
@@ -2710,6 +2730,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	model.DataNode = getBoolValue(categoryData, "dataNode")
 	model.InteractiveUser = getStringValue(categoryData, "interactiveUser")
 	model.UseExclusivelyFor = getStringValue(categoryData, "useExclusivelyFor")
+	model.CpuspeedGovernor = getStringValue(categoryData, "cpuspeedGovernor")
 
 	// Installation additional settings (T023-T025)
 	model.NodeInstallerDisk = getBoolValue(categoryData, "nodeInstallerDisk")
@@ -2751,9 +2772,9 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 				mountObj, objDiags := types.ObjectValue(fsMountObjectType.AttrTypes, map[string]attr.Value{
 					"uuid":         getStringValue(mountMap, "uuid"),
 					"device":       getStringValue(mountMap, "device"),
-					"mountpoint":   getStringValue(mountMap, "path"),    // path -> mountpoint
-					"filesystem":   getStringValue(mountMap, "type"),    // type -> filesystem
-					"mountoptions": getStringValue(mountMap, "options"), // options -> mountoptions
+					"mountpoint":   getStringValue(mountMap, "mountpoint"),
+					"filesystem":   getStringValue(mountMap, "filesystem"),
+					"mountoptions": getStringValue(mountMap, "mountoptions"),
 					"fsck":         getStringValue(mountMap, "fsck"),
 					"dump":         getBoolValue(mountMap, "dump"),
 					"rdma":         getBoolValue(mountMap, "rdma"),
@@ -3075,6 +3096,17 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	model.ProxySettings = types.ObjectNull(map[string]attr.Type{})
 	model.TimeZoneSettings = types.ObjectNull(map[string]attr.Type{})
 	model.ZTPSettings = types.ObjectNull(map[string]attr.Type{})
+
+	// BCM internal (Computed-only, never sent)
+	if ev, ok := categoryData["extra_values"]; ok && ev != nil {
+		if evBytes, err := json.Marshal(ev); err == nil {
+			model.ExtraValues = types.StringValue(string(evBytes))
+		} else {
+			model.ExtraValues = types.StringNull()
+		}
+	} else {
+		model.ExtraValues = types.StringNull()
+	}
 
 	// Computed metadata fields
 	model.BaseType = getStringValue(categoryData, "baseType")
