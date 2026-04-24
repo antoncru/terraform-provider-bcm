@@ -14,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -60,6 +62,21 @@ type CMNetNetworkResourceModel struct {
 	Revision       types.String `tfsdk:"revision"`
 	Modified       types.Bool   `tfsdk:"modified"`
 	ToBeRemoved    types.Bool   `tfsdk:"to_be_removed"`
+
+	AllowAutosign           types.String `tfsdk:"allow_autosign"`
+	GenerateDNSZone         types.String `tfsdk:"generate_dns_zone"`
+	LockDownDhcpd           types.Bool   `tfsdk:"lock_down_dhcpd"`
+	DisableAutomaticExports types.Bool   `tfsdk:"disable_automatic_exports"`
+	ExcludeFromSearchDomain types.Bool   `tfsdk:"exclude_from_search_domain"`
+	SearchDomainIndex       types.Int64  `tfsdk:"search_domain_index"`
+	IPv6Enabled             types.Bool   `tfsdk:"ipv6_enabled"`
+	IPv6BaseAddress         types.String `tfsdk:"ipv6_base_address"`
+	IPv6Gateway             types.String `tfsdk:"ipv6_gateway"`
+	IPv6NetmaskBits         types.Int64  `tfsdk:"ipv6_netmask_bits"`
+	EC2AvailabilityZone     types.String `tfsdk:"ec2_availability_zone"`
+	EC2String               types.String `tfsdk:"ec2_string"`
+	CloudSubnetID           types.String `tfsdk:"cloud_subnet_id"`
+	ExtraValues             types.String `tfsdk:"extra_values"`
 }
 
 // Metadata returns the resource type name.
@@ -123,8 +140,12 @@ func (r *CMNetNetworkResource) Schema(ctx context.Context, req resource.SchemaRe
 				},
 			},
 			"network_type": schema.StringAttribute{
+				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "BCM-assigned network type (e.g., INTERNAL, GLOBAL).",
+				MarkdownDescription: "Network type (e.g., INTERNAL, GLOBAL). BCM defaults to INTERNAL.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"mtu": schema.Int64Attribute{
 				Optional:            true,
@@ -159,12 +180,20 @@ func (r *CMNetNetworkResource) Schema(ctx context.Context, req resource.SchemaRe
 				},
 			},
 			"management": schema.BoolAttribute{
+				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "BCM-assigned management network flag.",
+				MarkdownDescription: "Whether this is a management network.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"bootable": schema.BoolAttribute{
+				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "BCM-assigned bootable network flag.",
+				MarkdownDescription: "Whether this network supports PXE boot.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"notes": schema.StringAttribute{
 				Optional:            true,
@@ -189,6 +218,117 @@ func (r *CMNetNetworkResource) Schema(ctx context.Context, req resource.SchemaRe
 			"to_be_removed": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "BCM removal flag.",
+			},
+			"allow_autosign": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Certificate auto-signing policy (AUTOMATIC, YES, NO). Default: AUTOMATIC.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"generate_dns_zone": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "DNS zone generation mode (BOTH, FORWARD, REVERSE, NONE). Default: BOTH.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"lock_down_dhcpd": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Whether DHCP server is locked down for this network.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"disable_automatic_exports": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Whether automatic NFS exports are disabled for this network.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"exclude_from_search_domain": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Whether this network is excluded from DNS search domains.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"search_domain_index": schema.Int64Attribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "DNS search domain priority index. Default: 0.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"ipv6_enabled": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Whether IPv6 is enabled on this network.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"ipv6_base_address": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "IPv6 base address for the network. Default: ::0.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"ipv6_gateway": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "IPv6 gateway address for the network. Default: ::0.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"ipv6_netmask_bits": schema.Int64Attribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "IPv6 network mask bits. Default: 0.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"ec2_availability_zone": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "AWS EC2 availability zone for cloud-integrated networks.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"ec2_string": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "AWS EC2 configuration string for cloud-integrated networks.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"cloud_subnet_id": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Cloud subnet identifier for cloud-integrated networks.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"extra_values": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "BCM internal extra values (JSON). Read-only.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -592,6 +732,30 @@ func buildNetworkAPIEntity(ctx context.Context, data *CMNetNetworkResourceModel,
 	SetStringField(entity, "dynamicRangeEnd", data.DHCPRangeEnd)
 	SetStringField(entity, "notes", data.Notes)
 
+	// Network classification
+	SetStringField(entity, "type", data.NetworkType)
+	SetBoolField(entity, "management", data.Management)
+	SetBoolField(entity, "bootable", data.Bootable)
+
+	// DNS/DHCP settings
+	SetStringField(entity, "allowAutosign", data.AllowAutosign)
+	SetStringField(entity, "generateDNSZone", data.GenerateDNSZone)
+	SetBoolField(entity, "lockDownDhcpd", data.LockDownDhcpd)
+	SetBoolField(entity, "disableAutomaticExports", data.DisableAutomaticExports)
+	SetBoolField(entity, "excludeFromSearchDomain", data.ExcludeFromSearchDomain)
+	SetInt64Field(entity, "searchDomainIndex", data.SearchDomainIndex)
+
+	// IPv6 settings
+	SetBoolField(entity, "IPv6", data.IPv6Enabled)
+	SetStringField(entity, "ipv6BaseAddress", data.IPv6BaseAddress)
+	SetStringField(entity, "ipv6Gateway", data.IPv6Gateway)
+	SetInt64Field(entity, "ipv6NetmaskBits", data.IPv6NetmaskBits)
+
+	// Cloud settings
+	SetStringField(entity, "EC2AvailabilityZone", data.EC2AvailabilityZone)
+	SetStringField(entity, "EC2String", data.EC2String)
+	SetStringField(entity, "cloudSubnetID", data.CloudSubnetID)
+
 	return entity, nil
 }
 
@@ -685,15 +849,47 @@ func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interf
 		data.Notes = types.StringNull()
 	}
 
-	// Computed BCM fields
+	// Network classification (Optional+Computed)
 	data.NetworkType = getStringValue(apiData, "type")
 	data.Management = getBoolValue(apiData, "management")
 	data.Bootable = getBoolValue(apiData, "bootable")
+
+	// BCM lifecycle fields (Computed)
 	data.BaseType = getStringValue(apiData, "baseType")
 	data.ChildType = getStringValue(apiData, "childType")
 	data.Revision = getStringValue(apiData, "revision")
 	data.Modified = getBoolValue(apiData, "modified")
 	data.ToBeRemoved = getBoolValue(apiData, "to_be_removed")
+
+	// DNS/DHCP settings (Optional+Computed)
+	data.AllowAutosign = getStringValue(apiData, "allowAutosign")
+	data.GenerateDNSZone = getStringValue(apiData, "generateDNSZone")
+	data.LockDownDhcpd = getBoolValue(apiData, "lockDownDhcpd")
+	data.DisableAutomaticExports = getBoolValue(apiData, "disableAutomaticExports")
+	data.ExcludeFromSearchDomain = getBoolValue(apiData, "excludeFromSearchDomain")
+	data.SearchDomainIndex = getInt64Value(apiData, "searchDomainIndex")
+
+	// IPv6 settings (Optional+Computed)
+	data.IPv6Enabled = getBoolValue(apiData, "IPv6")
+	data.IPv6BaseAddress = getStringValue(apiData, "ipv6BaseAddress")
+	data.IPv6Gateway = getStringValue(apiData, "ipv6Gateway")
+	data.IPv6NetmaskBits = getInt64Value(apiData, "ipv6NetmaskBits")
+
+	// Cloud settings (Optional+Computed)
+	data.EC2AvailabilityZone = getStringValue(apiData, "EC2AvailabilityZone")
+	data.EC2String = getStringValue(apiData, "EC2String")
+	data.CloudSubnetID = getStringValue(apiData, "cloudSubnetID")
+
+	// BCM internal (Computed-only, never sent)
+	if ev, ok := apiData["extra_values"]; ok && ev != nil {
+		if evBytes, err := json.Marshal(ev); err == nil {
+			data.ExtraValues = types.StringValue(string(evBytes))
+		} else {
+			data.ExtraValues = types.StringNull()
+		}
+	} else {
+		data.ExtraValues = types.StringNull()
+	}
 }
 
 // parseCIDR converts CIDR notation to baseAddress and netmaskBits.
