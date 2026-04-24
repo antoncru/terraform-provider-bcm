@@ -168,6 +168,47 @@ See **AGENTS.md** for complete TDD patterns including:
 - Modern testing patterns (statecheck, plancheck)
 - CheckDestroy patterns
 
+### Unit Test Map
+
+| Test file | What it tests |
+|-----------|---------------|
+| `bcm_client_test.go` | JSON-RPC client logic |
+| `utils_test.go` | Helper functions (field setters, UUID handling) |
+| `schema_helpers_test.go` | Schema builder utilities |
+| `error_messages_test.go` | Error message formatting |
+| `dependency_helpers_test.go` | Resource dependency resolution |
+| `validate_category_test.go` | Category validation logic |
+| `resource_base_test.go` | Shared resource base behavior |
+| `action_cmdevice_power_test.go` | Power action schema and mapping |
+| `provider_config_test.go` | Provider configuration parsing |
+| `provider_optional_config_unit_test.go` | Optional config field handling |
+| `data_source_cmdevice_categories_unit_test.go` | Category data source unit logic |
+| `*_mock_test.go` | Mock-based resource CRUD (device, kube cluster) |
+
+### Acceptance Test Coverage
+
+| Resource/Data Source | Test file | What's tested |
+|---------------------|-----------|---------------|
+| Devices | `resource_cmdevice_device_test.go` | CRUD, roles, interfaces, management network, drift, import, validation, disappears |
+| Device Idempotency | `resource_cmdevice_device_idempotency_test.go` | Create/update/import/drift idempotency |
+| Device Interfaces | `resource_cmdevice_device_interfaces_test.go` | Interface configuration |
+| Device Roles | `resource_cmdevice_device_roles_test.go` | Role association/dissociation |
+| Device Mock Errors | `resource_cmdevice_device_mock_test.go` | Error paths with mock server |
+| Categories | `resource_cmdevice_category_test.go` | CRUD, import, force delete, drift |
+| Etcd Clusters | `resource_cmetcd_cluster_test.go` | CRUD, import, drift, validation, disappears |
+| Kube Clusters | `resource_cmkube_cluster_test.go` | CRUD, drift, validation, worker nodes, etcd |
+| Kube Clusters (aligned) | `resource_cmkube_cluster_aligned_test.go` | API-aligned CRUD, networks, app groups, drift |
+| Power Actions | `action_cmdevice_power_acc_test.go` | Power on/off/reset/cycle, force, validation |
+| Categories (data) | `data_source_cmdevice_categories_test.go` | List, filter, nested attributes, disk setup |
+| Nodes (data) | `data_source_cmdevice_nodes_test.go` | List, filter by type/hostname/multiple |
+| Networks (data) | `data_source_cmnet_networks_test.go` | List, filter by name/DHCP, no match |
+| Software Images (data) | `data_source_cmpart_softwareimages_test.go` | List, filter, nested modules |
+| Partitions (data) | `data_source_cmpart_partitions_test.go` | List, filter, computed fields, case insensitive |
+| Entity Info (data) | `data_source_cmpart_entity_info_test.go` | List, filter by type/name/UUID, combined |
+| Kube Clusters (data) | `data_source_cmkube_clusters_test.go` | List, filter by name/version/etcd, null fields |
+| Users (data) | `data_source_cmuser_users_test.go` | List, filter by username/group/ID, nested |
+| Provider Config | `provider_optional_config_test.go` | Insecure skip verify, timeout, combined |
+
 ### Speckit Commands
 
 ```bash
@@ -191,6 +232,8 @@ See **AGENTS.md** for complete TDD patterns including:
 - **TDD Patterns:** `./AGENTS.md`
 - **BCM API Docs:** `sampleRest/CMDevice_Complete_Documentation.md`
 - **Skills:** `terraform-provider-tests`, `terraform-provider-design`
+- **Resource Code Patterns:** `notes/provider-architecture.md` (style census, receiver vs standalone, naming inconsistencies)
+- **Field Analysis:** `notes/bcm-provider-fields-analysis.md` (device), `notes/bcm-provider-network-analysis.md` (network), `notes/bcm-provider-category-analysis.md` (category)
 
 ## Appendix
 
