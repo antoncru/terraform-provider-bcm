@@ -97,6 +97,21 @@ BCM uses **patch semantics for scalar fields** and **full replacement for arrays
 - Preserve plan values for fields BCM resets (e.g., `original_image`)
 - Use exponential backoff for eventual consistency
 
+### Provider-Only Fields (Not in BCM Entity Model)
+
+These fields are not part of the BCM entity JSON. The `*_name` fields use the `_name` suffix convention to distinguish them from BCM API fields.
+
+| Field | Resource | Purpose | Notes |
+|-------|----------|---------|-------|
+| `category_name` | Device | Name→UUID resolver | Resolved via `cmdevice.getCategory(name)` |
+| `management_network_name` | Device | Name→UUID resolver | Resolved via `cmnet.getNetwork(name)` |
+| `partition_name` | Device | Name→UUID resolver | Resolved via `cmpart.getPartition(name)` |
+| `network_name` | Device (interfaces) | Name→UUID resolver | Resolved via `cmnet.getNetwork(name)` |
+| `force` | Device, Category, Software Image, User | API call argument | Passed as arg to `add*`/`update*`/`remove*` calls, not part of entity |
+| `timeout` | Power Action | Client-side wait limit | Not sent to BCM |
+
+Name fields are resolved to UUIDs at Create/Update time via `resolveNameReferences()` in `name_resolvers.go`. Each `*_name` / UUID pair is mutually exclusive (XOR via `ConflictsWith` + `AtLeastOneOf` validators). The resolved UUID is stored in state; the name is preserved from plan/prior state since BCM doesn't return it.
+
 ### Validation
 
 ```go

@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -47,10 +48,13 @@ type CMDeviceDeviceResourceModel struct {
 	Hostname types.String `tfsdk:"hostname"` // Required, RFC 1123 validation
 	MAC      types.String `tfsdk:"mac"`      // Optional+Computed, derived from first interface
 
-	// References (required)
-	Category          types.String `tfsdk:"category"`           // Required, UUID reference
-	ManagementNetwork types.String `tfsdk:"management_network"` // Optional+Computed, UUID reference
-	Partition         types.String `tfsdk:"partition"`          // Optional, UUID reference (uses default if not set)
+	// References — UUID or name (mutually exclusive pairs)
+	Category              types.String `tfsdk:"category"`                // Optional, UUID reference (required if category_name not set)
+	CategoryName          types.String `tfsdk:"category_name"`           // Optional, resolved to UUID via BCM API
+	ManagementNetwork     types.String `tfsdk:"management_network"`      // Optional+Computed, UUID reference
+	ManagementNetworkName types.String `tfsdk:"management_network_name"` // Optional, resolved to UUID via BCM API
+	Partition             types.String `tfsdk:"partition"`               // Optional, UUID reference (uses default if not set)
+	PartitionName         types.String `tfsdk:"partition_name"`          // Optional, resolved to UUID via BCM API
 
 	// Optional configuration
 	Notes              types.String `tfsdk:"notes"`                // Optional
@@ -253,19 +257,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				},
 			},
 			"category": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Category UUID reference",
-				Validators: []validator.String{
-					stringvalidator.RegexMatches(
-						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
-						"must be valid UUID (RFC 4122)",
-					),
-				},
-			},
-			"management_network": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Management network UUID reference. Optional — if not specified, the device has no management network set.",
+				MarkdownDescription: "Category UUID reference. Mutually exclusive with `category_name`.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -274,17 +268,57 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
 						"must be valid UUID (RFC 4122)",
 					),
+					stringvalidator.ConflictsWith(path.MatchRoot("category_name")),
+					stringvalidator.AtLeastOneOf(path.MatchRoot("category"), path.MatchRoot("category_name")),
 				},
 			},
-			"partition": schema.StringAttribute{
+			"category_name": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Category name — resolved to a UUID via the BCM API. Mutually exclusive with `category`.",
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("category")),
+				},
+			},
+			"management_network": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Partition UUID reference (uses category default if not specified)",
+				MarkdownDescription: "Management network UUID reference. Mutually exclusive with `management_network_name`; one of the two must be set.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
 						"must be valid UUID (RFC 4122)",
 					),
+					stringvalidator.ConflictsWith(path.MatchRoot("management_network_name")),
+					stringvalidator.AtLeastOneOf(path.MatchRoot("management_network"), path.MatchRoot("management_network_name")),
+				},
+			},
+			"management_network_name": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Management network name — resolved to a UUID via the BCM API. Mutually exclusive with `management_network`.",
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("management_network")),
+				},
+			},
+			"partition": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Partition UUID reference (uses category default if not specified). Mutually exclusive with `partition_name`.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be valid UUID (RFC 4122)",
+					),
+					stringvalidator.ConflictsWith(path.MatchRoot("partition_name")),
+				},
+			},
+			"partition_name": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Partition name — resolved to a UUID via the BCM API. Mutually exclusive with `partition`.",
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("partition")),
 				},
 			},
 			"notes": schema.StringAttribute{
@@ -790,12 +824,28 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 						},
 						"network": schema.StringAttribute{
 							Optional:            true,
-							MarkdownDescription: "Network UUID reference for interface assignment.",
+							Computed:            true,
+							MarkdownDescription: "Network UUID reference for interface assignment. Mutually exclusive with `network_name`; one of the two must be set.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 							Validators: []validator.String{
 								stringvalidator.RegexMatches(
 									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
 									"must be valid UUID (RFC 4122)",
 								),
+								stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("network_name")),
+								stringvalidator.AtLeastOneOf(
+									path.MatchRelative().AtParent().AtName("network"),
+									path.MatchRelative().AtParent().AtName("network_name"),
+								),
+							},
+						},
+						"network_name": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Network name — resolved to a UUID via the BCM API. Mutually exclusive with `network`.",
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("network")),
 							},
 						},
 						"mac": schema.StringAttribute{
@@ -1248,6 +1298,12 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
+	// Resolve *_name fields to UUIDs before any other processing
+	resp.Diagnostics.Append(r.resolveNameReferences(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Generate UUID for new device (BCM requires UUID before creation)
 	newUUID := uuid.New().String()
 
@@ -1515,6 +1571,12 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		state.EtcdHostRoles = mergeEtcdHostRolesWithDefaults(state.EtcdHostRoles, plan.EtcdHostRoles)
 	}
 
+	// Preserve *_name fields from plan (BCM doesn't store these)
+	state.CategoryName = plan.CategoryName
+	state.ManagementNetworkName = plan.ManagementNetworkName
+	state.PartitionName = plan.PartitionName
+	preserveInterfaceNetworkNames(state.Interfaces, plan.Interfaces)
+
 	// Set state - use what BCM returns for all other fields
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -1591,6 +1653,60 @@ func emptyStringSet() types.Set {
 	}
 
 	return rolesSet
+}
+
+// resolveNameReferences resolves *_name fields to their UUID counterparts by querying the BCM API.
+// Must be called early in Create/Update, before partition resolution or entity building.
+func (r *CMDeviceDeviceResource) resolveNameReferences(ctx context.Context, plan *CMDeviceDeviceResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	// category_name → category
+	if !plan.CategoryName.IsNull() && !plan.CategoryName.IsUnknown() {
+		resolved, err := resolveCategoryUUID(ctx, r.Client, plan.CategoryName.ValueString())
+		if err != nil {
+			diags.AddError("Error Resolving Category Name", err.Error())
+			return diags
+		}
+		plan.Category = types.StringValue(resolved)
+	}
+
+	// management_network_name → management_network
+	if !plan.ManagementNetworkName.IsNull() && !plan.ManagementNetworkName.IsUnknown() {
+		resolved, err := resolveNetworkUUID(ctx, r.Client, plan.ManagementNetworkName.ValueString())
+		if err != nil {
+			diags.AddError("Error Resolving Management Network Name", err.Error())
+			return diags
+		}
+		plan.ManagementNetwork = types.StringValue(resolved)
+	}
+
+	// partition_name → partition
+	if !plan.PartitionName.IsNull() && !plan.PartitionName.IsUnknown() {
+		resolved, err := resolvePartitionUUID(ctx, r.Client, plan.PartitionName.ValueString())
+		if err != nil {
+			diags.AddError("Error Resolving Partition Name", err.Error())
+			return diags
+		}
+		plan.Partition = types.StringValue(resolved)
+	}
+
+	// interface network_name → network (per interface)
+	for i := range plan.Interfaces {
+		iface := &plan.Interfaces[i]
+		if !iface.NetworkName.IsNull() && !iface.NetworkName.IsUnknown() {
+			resolved, err := resolveNetworkUUID(ctx, r.Client, iface.NetworkName.ValueString())
+			if err != nil {
+				diags.AddError(
+					"Error Resolving Interface Network Name",
+					fmt.Sprintf("Interface %q: %s", iface.Name.ValueString(), err.Error()),
+				)
+				return diags
+			}
+			iface.Network = types.StringValue(resolved)
+		}
+	}
+
+	return diags
 }
 
 // resolvePartitionFromCategory resolves the partition UUID for a device.
@@ -1894,6 +2010,14 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 		}
 	}
 
+	// Preserve *_name fields from prior state (BCM doesn't store these)
+	if !isImport {
+		newState.CategoryName = state.CategoryName
+		newState.ManagementNetworkName = state.ManagementNetworkName
+		newState.PartitionName = state.PartitionName
+		preserveInterfaceNetworkNames(newState.Interfaces, state.Interfaces)
+	}
+
 	// Set state - use what BCM returns (with preserved fields)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
@@ -1913,6 +2037,12 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Resolve *_name fields to UUIDs before any other processing
+	resp.Diagnostics.Append(r.resolveNameReferences(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -2131,6 +2261,12 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	} else {
 		newState.EtcdHostRoles = mergeEtcdHostRolesWithDefaults(newState.EtcdHostRoles, plan.EtcdHostRoles)
 	}
+
+	// Preserve *_name fields from plan (BCM doesn't store these)
+	newState.CategoryName = plan.CategoryName
+	newState.ManagementNetworkName = plan.ManagementNetworkName
+	newState.PartitionName = plan.PartitionName
+	preserveInterfaceNetworkNames(newState.Interfaces, plan.Interfaces)
 
 	// Set state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)

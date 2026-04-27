@@ -24,11 +24,15 @@ type DeviceInterfaceModel struct {
 	// Required. Maps to BCM childType.
 	Type types.String `tfsdk:"type"`
 
-	// ===== Network Assignment =====
+	// ===== Network Assignment (UUID or name, mutually exclusive) =====
 
 	// Network is the UUID reference to a bcm_cmnet_network resource.
 	// Optional. When not specified, interface is not assigned to a network.
 	Network types.String `tfsdk:"network"`
+
+	// NetworkName is the human-readable network name, resolved to a UUID via BCM API.
+	// Optional. Mutually exclusive with Network.
+	NetworkName types.String `tfsdk:"network_name"`
 
 	// MAC is the interface MAC address (format: 00:11:22:33:44:55).
 	// Optional for create (BCM may auto-detect), but recommended for physical interfaces.
@@ -367,14 +371,24 @@ func parseInterfaceFromAPI(data map[string]interface{}) DeviceInterfaceModel {
 }
 
 // findInterfaceByName searches for an interface by name in a list of interfaces.
-// Returns the interface and its index, or nil and -1 if not found.
-func findInterfaceByName(interfaces []DeviceInterfaceModel, name string) (*DeviceInterfaceModel, int) {
+// Returns the interface, or nil if not found.
+func findInterfaceByName(interfaces []DeviceInterfaceModel, name string) *DeviceInterfaceModel {
 	for i, iface := range interfaces {
 		if iface.Name.ValueString() == name {
-			return &interfaces[i], i
+			return &interfaces[i]
 		}
 	}
-	return nil, -1
+	return nil
+}
+
+// preserveInterfaceNetworkNames copies network_name from source interfaces to dest interfaces,
+// matching by interface name. Used to preserve user-provided name fields that BCM doesn't store.
+func preserveInterfaceNetworkNames(dest []DeviceInterfaceModel, source []DeviceInterfaceModel) {
+	for i := range dest {
+		if src := findInterfaceByName(source, dest[i].Name.ValueString()); src != nil {
+			dest[i].NetworkName = src.NetworkName
+		}
+	}
 }
 
 // buildInterfacesAPIArray constructs BCM API interfaces array from Terraform model.
@@ -385,7 +399,7 @@ func buildInterfacesAPIArray(interfaces []DeviceInterfaceModel, existingInterfac
 	for _, iface := range interfaces {
 		// Look for existing interface with same name to preserve UUID
 		existingUUID := ""
-		if existing, _ := findInterfaceByName(existingInterfaces, iface.Name.ValueString()); existing != nil {
+		if existing := findInterfaceByName(existingInterfaces, iface.Name.ValueString()); existing != nil {
 			existingUUID = existing.UUID.ValueString()
 		}
 
