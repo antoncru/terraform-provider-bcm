@@ -149,11 +149,19 @@ func (r *CMNetNetworkResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"mtu": schema.Int64Attribute{
 				Optional:            true,
-				MarkdownDescription: "Maximum transmission unit (MTU) for the network. Default: 1500.",
+				Computed:            true,
+				MarkdownDescription: "Maximum transmission unit (MTU) for the network.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"domain_name": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "DNS domain name for the network. Default: 'cluster.local' if not specified.",
+				Computed:            true,
+				MarkdownDescription: "DNS domain name for the network.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"dhcp_enabled": schema.BoolAttribute{
 				Computed:            true,
@@ -455,15 +463,7 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	plannedMTU := plan.MTU
-	plannedDomainName := plan.DomainName
 	mapNetworkAPIResponseToState(ctx, createdNetwork, &plan)
-	if !plannedMTU.IsNull() && !plannedMTU.IsUnknown() && plannedMTU.ValueInt64() == 1500 && plan.MTU.IsNull() {
-		plan.MTU = plannedMTU
-	}
-	if plannedDomainName.IsNull() && !plan.DomainName.IsNull() && plan.DomainName.ValueString() == "cluster.local" {
-		plan.DomainName = types.StringNull()
-	}
 
 	tflog.Trace(ctx, "Created network resource", map[string]interface{}{
 		"uuid": plan.UUID.ValueString(),
@@ -527,15 +527,7 @@ func (r *CMNetNetworkResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Map response to state
-	priorMTU := state.MTU
-	priorDomainName := state.DomainName
 	mapNetworkAPIResponseToState(ctx, network, &state)
-	if !priorMTU.IsNull() && !priorMTU.IsUnknown() && priorMTU.ValueInt64() == 1500 && state.MTU.IsNull() {
-		state.MTU = priorMTU
-	}
-	if priorDomainName.IsNull() && !state.DomainName.IsNull() && state.DomainName.ValueString() == "cluster.local" {
-		state.DomainName = types.StringNull()
-	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -625,15 +617,7 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	// Map response to state
-	plannedMTU := plan.MTU
-	plannedDomainName := plan.DomainName
 	mapNetworkAPIResponseToState(ctx, updatedNetwork, &plan)
-	if !plannedMTU.IsNull() && !plannedMTU.IsUnknown() && plannedMTU.ValueInt64() == 1500 && plan.MTU.IsNull() {
-		plan.MTU = plannedMTU
-	}
-	if plannedDomainName.IsNull() && !plan.DomainName.IsNull() && plan.DomainName.ValueString() == "cluster.local" {
-		plan.DomainName = types.StringNull()
-	}
 
 	tflog.Trace(ctx, "Updated network resource", map[string]interface{}{
 		"uuid": plan.UUID.ValueString(),
@@ -708,12 +692,7 @@ func buildNetworkAPIEntity(ctx context.Context, data *CMNetNetworkResourceModel,
 	// Required fields
 	SetStringField(entity, "name", data.Name)
 
-	// Domain name (required by BCM, use default if not provided)
-	if !data.DomainName.IsNull() && !data.DomainName.IsUnknown() && data.DomainName.ValueString() != "" {
-		entity["domainName"] = data.DomainName.ValueString()
-	} else {
-		entity["domainName"] = "cluster.local"
-	}
+	SetStringField(entity, "domainName", data.DomainName)
 
 	// Parse subnet if provided
 	if !data.Subnet.IsNull() && !data.Subnet.IsUnknown() {
@@ -823,23 +802,9 @@ func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interf
 		data.Gateway = types.StringNull()
 	}
 
-	mtu := getInt64Value(apiData, "mtu")
-	if !mtu.IsNull() && mtu.ValueInt64() != 1500 {
-		// Only set MTU if different from BCM default (1500)
-		data.MTU = mtu
-	} else {
-		// BCM returned default (1500) - reset to null to reflect actual API state
-		data.MTU = types.Int64Null()
-	}
+	data.MTU = getInt64Value(apiData, "mtu")
 
-	// Domain name and notes - reset to null if BCM returns empty
-	domainName := getStringValue(apiData, "domainName")
-	if !domainName.IsNull() && domainName.ValueString() != "" {
-		data.DomainName = domainName
-	} else {
-		// BCM returned empty - reset to null to reflect actual API state
-		data.DomainName = types.StringNull()
-	}
+	data.DomainName = getStringValue(apiData, "domainName")
 
 	notes := getStringValue(apiData, "notes")
 	if !notes.IsNull() && notes.ValueString() != "" {

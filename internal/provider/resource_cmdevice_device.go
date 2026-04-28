@@ -64,10 +64,10 @@ type CMDeviceDeviceResourceModel struct {
 	Force              types.Bool   `tfsdk:"force"`                // Optional, default: false
 
 	// Power control configuration
-	PowerControl types.String `tfsdk:"power_control"` // Optional, e.g., "none", "ipmi", "ipdu"
+	PowerControl types.String `tfsdk:"power_control"` // Optional+Computed, e.g., "none", "ipmi", "ipdu"
 
 	// Network gateway configuration
-	DefaultGateway       types.String `tfsdk:"default_gateway"`        // Optional, IP address
+	DefaultGateway       types.String `tfsdk:"default_gateway"`        // Optional+Computed, IP address
 	DefaultGatewayMetric types.Int64  `tfsdk:"default_gateway_metric"` // Optional+Computed, gateway metric/priority
 
 	// Hardware identifiers
@@ -357,8 +357,12 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"power_control": schema.StringAttribute{
 				Optional: true,
+				Computed: true,
 				MarkdownDescription: "Power control method: 'none', 'ipmi', 'pdu', 'redfish', 'custom', or an IPMI interface " +
 					"reference such as 'ipmi0' (BCM returns the BMC interface name when using IPMI).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^(none|ipmi|pdu|redfish|custom|ipmi[0-9]+)$`),
@@ -368,7 +372,11 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"default_gateway": schema.StringAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Default gateway IP address for the device",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`),
@@ -1521,27 +1529,6 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		state.ManagementNetwork = types.StringNull()
 	}
 
-	// BCM returns default values for Optional+Computed fields when not explicitly set
-	// Preserve null from plan to avoid drift
-	if plan.PowerControl.IsNull() && !state.PowerControl.IsNull() {
-		state.PowerControl = types.StringNull()
-	}
-
-	if plan.DefaultGateway.IsNull() && !state.DefaultGateway.IsNull() {
-		state.DefaultGateway = types.StringNull()
-	}
-
-	if plan.DefaultGatewayMetric.IsNull() && !state.DefaultGatewayMetric.IsNull() {
-		state.DefaultGatewayMetric = types.Int64Null()
-	}
-
-	if plan.SerialNumber.IsNull() && !state.SerialNumber.IsNull() {
-		state.SerialNumber = types.StringNull()
-	}
-
-	if plan.PartNumber.IsNull() && !state.PartNumber.IsNull() {
-		state.PartNumber = types.StringNull()
-	}
 
 	// Preserve the distinction between omitted roles (null) and explicit empty roles ([]).
 	if plan.Roles.IsNull() {
@@ -1933,27 +1920,6 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 			newState.Partition = types.StringNull()
 		}
 
-		// BCM returns default values for Optional+Computed fields when not explicitly set
-		// Preserve null from plan to avoid drift
-		if state.PowerControl.IsNull() && !newState.PowerControl.IsNull() {
-			newState.PowerControl = types.StringNull()
-		}
-
-		if state.DefaultGateway.IsNull() && !newState.DefaultGateway.IsNull() {
-			newState.DefaultGateway = types.StringNull()
-		}
-
-		if state.DefaultGatewayMetric.IsNull() && !newState.DefaultGatewayMetric.IsNull() {
-			newState.DefaultGatewayMetric = types.Int64Null()
-		}
-
-		if state.SerialNumber.IsNull() && !newState.SerialNumber.IsNull() {
-			newState.SerialNumber = types.StringNull()
-		}
-
-		if state.PartNumber.IsNull() && !newState.PartNumber.IsNull() {
-			newState.PartNumber = types.StringNull()
-		}
 	} else {
 		// Import path: Use all values from BCM, don't set to null
 		// BCM returns "CATEGORY" for fields inheriting from category - this is valid during import
@@ -2210,28 +2176,6 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	}
 	if plan.BootLoaderProtocol.IsNull() {
 		newState.BootLoaderProtocol = types.StringNull() // Keep null if not explicitly set
-	}
-
-	// BCM returns default values for Optional+Computed fields when not explicitly set
-	// Preserve null from plan to avoid drift
-	if plan.PowerControl.IsNull() && !newState.PowerControl.IsNull() {
-		newState.PowerControl = types.StringNull()
-	}
-
-	if plan.DefaultGateway.IsNull() && !newState.DefaultGateway.IsNull() {
-		newState.DefaultGateway = types.StringNull()
-	}
-
-	if plan.DefaultGatewayMetric.IsNull() && !newState.DefaultGatewayMetric.IsNull() {
-		newState.DefaultGatewayMetric = types.Int64Null()
-	}
-
-	if plan.SerialNumber.IsNull() && !newState.SerialNumber.IsNull() {
-		newState.SerialNumber = types.StringNull()
-	}
-
-	if plan.PartNumber.IsNull() && !newState.PartNumber.IsNull() {
-		newState.PartNumber = types.StringNull()
 	}
 
 	// Preserve the distinction between omitted roles (null) and explicit empty roles ([]).
