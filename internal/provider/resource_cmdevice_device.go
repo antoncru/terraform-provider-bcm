@@ -1529,7 +1529,6 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		state.ManagementNetwork = types.StringNull()
 	}
 
-
 	// Preserve the distinction between omitted roles (null) and explicit empty roles ([]).
 	if plan.Roles.IsNull() {
 		state.Roles = types.SetNull(types.StringType)
