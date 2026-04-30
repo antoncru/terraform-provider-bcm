@@ -49,7 +49,7 @@ type DeviceInterfaceModel struct {
 	// ===== Configuration Flags =====
 
 	// DHCP enables DHCP for IP address assignment.
-	// Optional. Default: true.
+	// Optional. Default: false.
 	DHCP types.Bool `tfsdk:"dhcp"`
 
 	// Bootable indicates if this interface supports PXE boot.
