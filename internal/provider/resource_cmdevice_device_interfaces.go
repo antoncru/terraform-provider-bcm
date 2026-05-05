@@ -91,6 +91,9 @@ type DeviceInterfaceModel struct {
 	// ConnectedMode indicates whether the interface operates in connected mode (e.g. InfiniBand).
 	ConnectedMode types.Bool `tfsdk:"connected_mode"`
 
+	// ExcludeFromDhcpd excludes this interface from the DHCP server configuration (BCM: excludeFromDhcpd).
+	ExcludeFromDhcpd types.Bool `tfsdk:"exclude_from_dhcpd"`
+
 	// IPv6DHCP enables IPv6 DHCP for this interface.
 	IPv6DHCP types.Bool `tfsdk:"ipv6_dhcp"`
 
@@ -192,6 +195,8 @@ func buildInterfaceAPIEntity(iface DeviceInterfaceModel, existingUUID string) ma
 	} else {
 		entity["bootable"] = false // Default
 	}
+
+	SetBoolField(entity, "excludeFromDhcpd", iface.ExcludeFromDhcpd)
 
 	if !iface.StartIf.IsNull() && !iface.StartIf.IsUnknown() {
 		entity["startIf"] = iface.StartIf.ValueString()
@@ -319,6 +324,7 @@ func parseInterfaceFromAPI(data map[string]interface{}) DeviceInterfaceModel {
 	// Configuration flags
 	model.DHCP = getBoolValue(data, "dhcp")
 	model.Bootable = getBoolValue(data, "bootable")
+	model.ExcludeFromDhcpd = getBoolValue(data, "excludeFromDhcpd")
 	model.StartIf = getStringValue(data, "startIf")
 	model.CardType = getStringValue(data, "cardtype")
 

@@ -92,6 +92,7 @@ type CMDeviceDeviceResourceModel struct {
 	EtcdHostRoles []EtcdHostRoleModel `tfsdk:"etcd_host_role"`
 
 	// Extended CMDevice API fields (fuller parity with getDevice JSON)
+	AuthenticationService types.String                 `tfsdk:"authentication_service"`
 	CmdaemonURL           types.String                 `tfsdk:"cmdaemon_url"`
 	Fips                  types.String                 `tfsdk:"fips"`
 	FromTemplateNode      types.String                 `tfsdk:"from_template_node"`
@@ -159,21 +160,24 @@ type CMDeviceDeviceResourceModel struct {
 	Modules                       types.List `tfsdk:"modules"`
 
 	// Complex objects stored as JSON-encoded strings (null when unset)
+	AccessSettings   types.String `tfsdk:"access_settings"`
 	BiosSetup        types.String `tfsdk:"bios_setup"`
 	BmcSettings      types.String `tfsdk:"bmc_settings"`
+	ChassisPosition  types.String `tfsdk:"chassis_position"`
 	ExtraValues      types.String `tfsdk:"extra_values"`
 	ProxySettings    types.String `tfsdk:"proxy_settings"`
 	SeLinuxSettings  types.String `tfsdk:"se_linux_settings"`
 	TimeZoneSettings types.String `tfsdk:"time_zone_settings"`
 
 	// Complex lists stored as JSON-encoded strings (null when empty)
-	Fsexports              types.String `tfsdk:"fsexports"`
-	Fsmounts               types.String `tfsdk:"fsmounts"`
-	GpuSettings            types.String `tfsdk:"gpu_settings"`
-	PowerDistributionUnits types.String `tfsdk:"power_distribution_units"`
-	StaticRoutes           types.String `tfsdk:"static_routes"`
-	SwitchPorts            types.String `tfsdk:"switch_ports"`
-	UserDefinedResources   types.String `tfsdk:"user_defined_resources"`
+	Fsexports                  types.String `tfsdk:"fsexports"`
+	Fsmounts                   types.String `tfsdk:"fsmounts"`
+	GpuSettings                types.String `tfsdk:"gpu_settings"`
+	PowerDistributionUnits     types.String `tfsdk:"power_distribution_units"`
+	PrometheusMetricForwarders types.String `tfsdk:"prometheus_metric_forwarders"`
+	StaticRoutes               types.String `tfsdk:"static_routes"`
+	SwitchPorts                types.String `tfsdk:"switch_ports"`
+	UserDefinedResources       types.String `tfsdk:"user_defined_resources"`
 }
 
 // DeviceOSServiceConfigModel represents one BCM OSServiceConfig entry on a device
@@ -428,6 +432,11 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"authentication_service": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Authentication service mode (e.g., 'CATEGORY'). BCM 11+.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"cmdaemon_url": schema.StringAttribute{
 				Optional:            true,
@@ -715,6 +724,11 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			},
 
 			// ── Complex objects (JSON-encoded) ─────────────────────
+			"access_settings": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Device access control settings (JSON-encoded when non-null). BCM 11+.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
 			"bios_setup": schema.StringAttribute{
 				Optional: true, Computed: true,
 				MarkdownDescription: "BIOS setup configuration (JSON-encoded when non-null).",
@@ -723,6 +737,11 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"bmc_settings": schema.StringAttribute{
 				Optional: true, Computed: true,
 				MarkdownDescription: "BMC settings configuration (JSON-encoded when non-null).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"chassis_position": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Physical chassis slot position (JSON-encoded when non-null). BCM 11+.",
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"extra_values": schema.StringAttribute{
@@ -765,6 +784,11 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"power_distribution_units": schema.StringAttribute{
 				Optional: true, Computed: true,
 				MarkdownDescription: "Power distribution units (JSON-encoded array when non-empty).",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"prometheus_metric_forwarders": schema.StringAttribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Prometheus metric forwarding endpoints (JSON-encoded array when non-empty). BCM 11+.",
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"static_routes": schema.StringAttribute{
@@ -889,6 +913,11 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 							Optional:            true,
 							Computed:            true,
 							MarkdownDescription: "Enable PXE boot capability. Default: false. First bootable interface becomes provisioning interface.",
+						},
+						"exclude_from_dhcpd": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Exclude this interface from the DHCP server configuration. Default: false.",
 						},
 						"start_if": schema.StringAttribute{
 							Optional:            true,
@@ -2433,6 +2462,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	SetStringField(entity, "serialNumber", plan.SerialNumber)
 	SetStringField(entity, "partNumber", plan.PartNumber)
 
+	SetStringField(entity, "authenticationService", plan.AuthenticationService)
 	SetStringField(entity, "cmdaemonUrl", plan.CmdaemonURL)
 	SetStringField(entity, "fips", plan.Fips)
 	SetStringField(entity, "fromTemplateNode", plan.FromTemplateNode)
@@ -2497,7 +2527,9 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	SetStringField(entity, "userdefined2", plan.Userdefined2)
 
 	// References
+	// BCM 10 uses "rack", BCM 11 renamed to "rackPosition" — send both for compatibility
 	SetJSONField(entity, "rack", plan.Rack)
+	SetJSONField(entity, "rackPosition", plan.Rack)
 	SetJSONField(entity, "softwareImageProxy", plan.SoftwareImageProxy)
 
 	// String lists
@@ -2513,8 +2545,10 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	}
 
 	// Complex objects
+	SetJSONField(entity, "accessSettings", plan.AccessSettings)
 	SetJSONField(entity, "biosSetup", plan.BiosSetup)
 	SetJSONField(entity, "bmcSettings", plan.BmcSettings)
+	SetJSONField(entity, "chassisPosition", plan.ChassisPosition)
 	SetJSONField(entity, "extra_values", plan.ExtraValues)
 	SetJSONField(entity, "proxySettings", plan.ProxySettings)
 	SetJSONField(entity, "seLinuxSettings", plan.SeLinuxSettings)
@@ -2525,6 +2559,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	SetJSONField(entity, "fsmounts", plan.Fsmounts)
 	SetJSONField(entity, "gpuSettings", plan.GpuSettings)
 	SetJSONField(entity, "powerDistributionUnits", plan.PowerDistributionUnits)
+	SetJSONField(entity, "prometheusMetricForwarders", plan.PrometheusMetricForwarders)
 	SetJSONField(entity, "staticRoutes", plan.StaticRoutes)
 	SetJSONField(entity, "switchPorts", plan.SwitchPorts)
 	SetJSONField(entity, "userDefinedResources", plan.UserDefinedResources)
@@ -2815,6 +2850,7 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.ChildType = types.StringNull()
 	}
 
+	model.AuthenticationService = getStringValue(data, "authenticationService")
 	model.CmdaemonURL = getStringValue(data, "cmdaemonUrl")
 
 	if fips, ok := data["fips"].(string); ok && fips != "" && !strings.EqualFold(fips, "CATEGORY") {
@@ -2933,7 +2969,11 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	model.Userdefined2 = getStringValue(data, "userdefined2")
 
 	// References
+	// BCM 10 uses "rack", BCM 11 renamed to "rackPosition" — read both for compatibility
 	model.Rack = getJSONValue(data, "rack")
+	if model.Rack.IsNull() {
+		model.Rack = getJSONValue(data, "rackPosition")
+	}
 	model.SoftwareImageProxy = getJSONValue(data, "softwareImageProxy")
 
 	// String lists
@@ -2941,8 +2981,10 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	model.Modules = GetStringListValue(data, "modules")
 
 	// Complex objects (JSON-encoded)
+	model.AccessSettings = getJSONValue(data, "accessSettings")
 	model.BiosSetup = getJSONValue(data, "biosSetup")
 	model.BmcSettings = getJSONValue(data, "bmcSettings")
+	model.ChassisPosition = getJSONValue(data, "chassisPosition")
 	model.ExtraValues = getJSONValue(data, "extra_values")
 	model.ProxySettings = getJSONValue(data, "proxySettings")
 	model.SeLinuxSettings = getJSONValue(data, "seLinuxSettings")
@@ -2953,6 +2995,7 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	model.Fsmounts = getJSONValue(data, "fsmounts")
 	model.GpuSettings = getJSONValue(data, "gpuSettings")
 	model.PowerDistributionUnits = getJSONValue(data, "powerDistributionUnits")
+	model.PrometheusMetricForwarders = getJSONValue(data, "prometheusMetricForwarders")
 	model.StaticRoutes = getJSONValue(data, "staticRoutes")
 	model.SwitchPorts = getJSONValue(data, "switchPorts")
 	model.UserDefinedResources = getJSONValue(data, "userDefinedResources")
