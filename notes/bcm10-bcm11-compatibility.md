@@ -3,7 +3,7 @@
 BCM 11 introduces structural changes to the device entity JSON schema. This document catalogs every field difference, explains why the provider's architecture handles most of them transparently, and describes the two fixes required for full compatibility.
 
 **Source entities analyzed:**
-- BCM 11: `dgx-04.json`, `cpu-04.json` (from `bcm11-casper/bcm11-json/`)
+- BCM 11: `dgx-04.json`, `cpu-04.json` (from `bcm11-json/`)
 - BCM 10: `dgx-03.json`, `cpu-03.json` (from `bcm10-json/`)
 
 ---
