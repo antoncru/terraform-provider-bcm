@@ -2333,57 +2333,36 @@ func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.I
 }
 
 // deriveProvisioningInterface selects the best interface UUID for PXE provisioning.
-// Priority: (1) named "BOOTIF" (PXE convention), (2) explicitly bootable,
-// (3) first non-BMC interface, (4) first interface (all-BMC edge case).
-// BMC interfaces (IPMI/iLO/iDRAC) are out-of-band management and cannot do PXE provisioning.
-//
-// TODO: Add bond interface support (e.g., "bond0") as a provisioning interface candidate.
-// Bond interfaces (childType "NetworkBondInterface") are valid PXE targets when the cluster
-// uses NIC bonding for redundancy. They should be prioritized after BOOTIF by name but
-// before the generic "first non-BMC" fallback — e.g., priority 2.5: first bond interface.
+// walk the interfaces list preferring bootif and then bond.
 func deriveProvisioningInterface(interfaces []interface{}) string {
-	// Priority 1: named "BOOTIF" (PXE boot interface convention — most reliable signal)
+	// placeholder in the event we find a bond interface before a bootif interface
+	var selectedUUID string
+
 	for _, iface := range interfaces {
-		if ifaceMap, ok := iface.(map[string]interface{}); ok {
-			if name, _ := ifaceMap["name"].(string); strings.EqualFold(name, "BOOTIF") {
-				if uuid, ok := ifaceMap["uuid"].(string); ok {
-					return uuid
-				}
-			}
+		ifaceMap, ok := iface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		uuid, ok := ifaceMap["uuid"].(string)
+		if !ok {
+			continue
+		}
+
+		// we observe in actual device json that "bootable" is still false even for bootif interface so we'll skip that condition for now
+
+		// definitely don't want the BMC interface
+		if childType, _ := ifaceMap["childType"].(string); strings.EqualFold(childType, "NetworkBmcInterface") {
+			continue
+		} else if name, _ := ifaceMap["name"].(string); strings.EqualFold(name, "BOOTIF") {
+			// prefer the bootif interface -- return if we find it
+			return uuid
+		} else if childType, _ := ifaceMap["childType"].(string); strings.EqualFold(childType, "NetworkBondInterface") {
+			// then bond interface last. however we need to walk the entire list in case for some reason there is both a bond interface and a bootif interface and bootif is last. so we'll remember the bond interface uuid for now.
+			selectedUUID = uuid
 		}
 	}
-	// Priority 2: explicitly bootable
-	for _, iface := range interfaces {
-		if ifaceMap, ok := iface.(map[string]interface{}); ok {
-			if bootable, _ := ifaceMap["bootable"].(bool); bootable {
-				if uuid, ok := ifaceMap["uuid"].(string); ok {
-					return uuid
-				}
-			}
-		}
-	}
-	// Priority 3: bond interface (aggregated link preferred over single physical for provisioning)
-	for _, iface := range interfaces {
-		if ifaceMap, ok := iface.(map[string]interface{}); ok {
-			if childType, _ := ifaceMap["childType"].(string); strings.EqualFold(childType, "NetworkBondInterface") {
-				if uuid, ok := ifaceMap["uuid"].(string); ok {
-					return uuid
-				}
-			}
-		}
-	}
-	// Priority 4: first non-BMC interface
-	for _, iface := range interfaces {
-		if ifaceMap, ok := iface.(map[string]interface{}); ok {
-			if childType, _ := ifaceMap["childType"].(string); strings.EqualFold(childType, "NetworkBmcInterface") {
-				continue
-			}
-			if uuid, ok := ifaceMap["uuid"].(string); ok {
-				return uuid
-			}
-		}
-	}
-	return ""
+	// this means we only found a bond interface or no valid interfaces which returns ""
+	return selectedUUID
 }
 
 // buildDeviceAPIEntityWithExisting constructs BCM API entity, preserving interface UUIDs from existing state.

@@ -1071,15 +1071,12 @@ func TestAccCMDeviceDevice_InterfaceDrift(t *testing.T) {
 // TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray verifies that
 // provisioningInterface UUID is derived from the built interfaces array (which
 // preserves UUIDs from existing state) rather than from plan.Interfaces (which
-// have empty UUIDs during updates). The bootable interface should be selected
+// have empty UUIDs during updates). The BOOTIF interface should be selected
 // even when it is NOT the first interface in the list.
 func TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray(t *testing.T) {
-	// Known UUIDs from existing state (simulating what BCM returned on create)
 	eth0ExistingUUID := "aaaaaaaa-1111-2222-3333-444444444444"
-	eth1ExistingUUID := "bbbbbbbb-5555-6666-7777-888888888888"
+	bootifExistingUUID := "bbbbbbbb-5555-6666-7777-888888888888"
 
-	// Plan interfaces: 2 interfaces where the SECOND (eth1) is bootable.
-	// UUIDs are empty strings to simulate an update where plan doesn't have UUIDs yet.
 	planInterfaces := []DeviceInterfaceModel{
 		{
 			Name:     types.StringValue("eth0"),
@@ -1088,28 +1085,27 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray(t *testing.T) 
 			MAC:      types.StringValue("00:11:22:33:44:55"),
 			Bootable: types.BoolValue(false),
 			DHCP:     types.BoolValue(true),
-			UUID:     types.StringValue(""), // empty - simulates update plan
+			UUID:     types.StringValue(""),
 		},
 		{
-			Name:     types.StringValue("eth1"),
+			Name:     types.StringValue("BOOTIF"),
 			Type:     types.StringValue("physical"),
 			Network:  types.StringValue("net-uuid-2"),
 			MAC:      types.StringValue("00:11:22:33:44:66"),
-			Bootable: types.BoolValue(true), // THIS is the bootable interface
+			Bootable: types.BoolValue(false),
 			DHCP:     types.BoolValue(true),
-			UUID:     types.StringValue(""), // empty - simulates update plan
+			UUID:     types.StringValue(""),
 		},
 	}
 
-	// Existing interfaces from state with known UUIDs (as if read from BCM)
 	existingInterfaces := []DeviceInterfaceModel{
 		{
 			Name: types.StringValue("eth0"),
 			UUID: types.StringValue(eth0ExistingUUID),
 		},
 		{
-			Name: types.StringValue("eth1"),
-			UUID: types.StringValue(eth1ExistingUUID),
+			Name: types.StringValue("BOOTIF"),
+			UUID: types.StringValue(bootifExistingUUID),
 		},
 	}
 
@@ -1123,14 +1119,11 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray(t *testing.T) 
 	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
 	require.NoError(t, err)
 
-	// The provisioningInterface must be the BOOTABLE interface's UUID (eth1),
-	// NOT the first interface's UUID (eth0).
 	provisioningUUID, ok := entity["provisioningInterface"].(string)
 	require.True(t, ok, "provisioningInterface should be a string")
-	assert.Equal(t, eth1ExistingUUID, provisioningUUID,
-		"provisioningInterface should match the bootable interface (eth1) UUID from existing state, not eth0")
+	assert.Equal(t, bootifExistingUUID, provisioningUUID,
+		"provisioningInterface should match the BOOTIF interface UUID from existing state, not eth0")
 
-	// Also verify the built interfaces array has correct UUIDs from existing state
 	builtInterfaces, ok := entity["interfaces"].([]interface{})
 	require.True(t, ok, "interfaces should be a slice")
 	require.Len(t, builtInterfaces, 2, "should have 2 interfaces")
@@ -1140,18 +1133,16 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray(t *testing.T) 
 	iface1, ok := builtInterfaces[1].(map[string]interface{})
 	require.True(t, ok, "interface 1 should be a map")
 	assert.Equal(t, eth0ExistingUUID, iface0["uuid"], "eth0 should preserve UUID from existing state")
-	assert.Equal(t, eth1ExistingUUID, iface1["uuid"], "eth1 should preserve UUID from existing state")
+	assert.Equal(t, bootifExistingUUID, iface1["uuid"], "BOOTIF should preserve UUID from existing state")
 }
 
-// TestBuildDeviceAPIEntity_ProvisioningInterfaceFallbackToFirst verifies that
-// when NO interface is marked bootable, provisioningInterface falls back to
-// the first interface's UUID from the built array.
-func TestBuildDeviceAPIEntity_ProvisioningInterfaceFallbackToFirst(t *testing.T) {
-	// Known UUIDs from existing state
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceNoBootifOrBond verifies that
+// when no interface is named BOOTIF and none is a bond, building the entity
+// returns an error (device is misconfigured for provisioning).
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceNoBootifOrBond(t *testing.T) {
 	eth0ExistingUUID := "cccccccc-1111-2222-3333-444444444444"
 	eth1ExistingUUID := "dddddddd-5555-6666-7777-888888888888"
 
-	// Plan interfaces: 2 interfaces, NEITHER is bootable
 	planInterfaces := []DeviceInterfaceModel{
 		{
 			Name:     types.StringValue("eth0"),
@@ -1167,13 +1158,12 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFallbackToFirst(t *testing.T)
 			Type:     types.StringValue("physical"),
 			Network:  types.StringValue("net-uuid-2"),
 			MAC:      types.StringValue("00:11:22:33:44:66"),
-			Bootable: types.BoolValue(false), // NOT bootable
+			Bootable: types.BoolValue(false),
 			DHCP:     types.BoolValue(true),
 			UUID:     types.StringValue(""),
 		},
 	}
 
-	// Existing interfaces from state with known UUIDs
 	existingInterfaces := []DeviceInterfaceModel{
 		{
 			Name: types.StringValue("eth0"),
@@ -1192,15 +1182,9 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFallbackToFirst(t *testing.T)
 	}
 
 	r := &CMDeviceDeviceResource{}
-	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
-	require.NoError(t, err)
-
-	// With no bootable interface, provisioningInterface should fall back to
-	// the FIRST interface's UUID from the built array (eth0).
-	provisioningUUID, ok := entity["provisioningInterface"].(string)
-	require.True(t, ok, "provisioningInterface should be a string")
-	assert.Equal(t, eth0ExistingUUID, provisioningUUID,
-		"provisioningInterface should fall back to first interface (eth0) UUID when no interface is bootable")
+	_, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.Error(t, err, "should error when no BOOTIF or bond interface exists")
+	assert.Contains(t, err.Error(), "could not determine provisioning interface")
 }
 
 // TestBuildDeviceAPIEntity_ProvisioningInterfaceSkipsBMC verifies that when no
@@ -1314,10 +1298,10 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceBOOTIFByName(t *testing.T) {
 		"provisioningInterface should select BOOTIF by name over eth0, even though eth0 is listed first")
 }
 
-// TestBuildDeviceAPIEntity_ProvisioningInterfaceNonBMCFallback verifies that
-// when no interface is bootable and none is named BOOTIF, the first non-BMC
-// interface is selected.
-func TestBuildDeviceAPIEntity_ProvisioningInterfaceNonBMCFallback(t *testing.T) {
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceNonBMCNoBootifOrBond verifies that
+// when no interface is named BOOTIF and none is a bond (only BMC + plain physical),
+// building the entity returns an error — the device is misconfigured for provisioning.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceNonBMCNoBootifOrBond(t *testing.T) {
 	ipmiUUID := "aaaa1111-2222-3333-4444-555555555555"
 	eth0UUID := "bbbb2222-3333-4444-5555-666666666666"
 	eth1UUID := "cccc3333-4444-5555-6666-777777777777"
@@ -1362,13 +1346,9 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceNonBMCFallback(t *testing.T) 
 	}
 
 	r := &CMDeviceDeviceResource{}
-	entity, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
-	require.NoError(t, err)
-
-	provisioningUUID, ok := entity["provisioningInterface"].(string)
-	require.True(t, ok, "provisioningInterface should be a string")
-	assert.Equal(t, eth0UUID, provisioningUUID,
-		"provisioningInterface should fall back to first non-BMC interface (eth0) when no BOOTIF exists")
+	_, err := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+	require.Error(t, err, "should error when no BOOTIF or bond interface exists")
+	assert.Contains(t, err.Error(), "could not determine provisioning interface")
 }
 
 // TestBuildDeviceAPIEntity_ProvisioningInterfaceOnlyBMC verifies that when ALL

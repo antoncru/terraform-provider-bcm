@@ -261,10 +261,9 @@ See **AGENTS.md** for complete TDD patterns including:
 | Priority | Condition | Rationale |
 |----------|-----------|-----------|
 | 1 | `name == "BOOTIF"` (case-insensitive) | PXE boot interface convention — most reliable signal |
-| 2 | `bootable == true` | Explicit flag, but BCM rarely sets it (usually `null`) |
-| 3 | `childType == "NetworkBondInterface"` (case-insensitive) | Bond interfaces are preferred for provisioning over single physical links |
-| 4 | First non-BMC interface | BMC (IPMI/iLO/iDRAC) is out-of-band management, cannot PXE |
-| 5 | First interface | All-BMC edge case fallback |
+| 2 | `childType == "NetworkBondInterface"` (case-insensitive) | Bond interfaces are preferred for provisioning over single physical links |
+| — | BMC interfaces skipped | BMC (IPMI/iLO/iDRAC) is out-of-band management, cannot PXE |
+| — | No match → empty string | Device is misconfigured; user must set `provisioning_interface` explicitly |
 
 **Error handling:** If no interface can be derived and the user didn't set `provisioning_interface`, the provider returns an error before any API call rather than sending an empty string to BCM.
 
